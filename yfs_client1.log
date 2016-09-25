@@ -1,0 +1,30 @@
+unique: 1, opcode: INIT (26), nodeid: 0, insize: 56
+INIT: 7.13
+flags=0x0000007b
+max_readahead=0x00020000
+   INIT: 7.8
+   flags=0x00000000
+   max_readahead=0x00020000
+   max_write=0x00020000
+   unique: 1, error: 0 (Success), outsize: 40
+unique: 2, opcode: LOOKUP (1), nodeid: 1, insize: 98
+   unique: 2, error: -2 (No such file or directory), outsize: 16
+unique: 3, opcode: CREATE (35), nodeid: 1, insize: 106
+extent_server: getattr 7371260384
+	im: get_inode 928809440
+	im: inum out of range
+isfile: 7371260384 is a dir
+getattr 00000001b75c81e0 0
+extent_server: getattr 7371260384
+	im: get_inode 928809440
+	im: inum out of range
+isfile: 7371260384 is a dir
+getdir 00000001b75c81e0
+extent_server: getattr 7371260384
+	im: get_inode 928809440
+	im: inum out of range
+   getattr -> 0 0 0
+   unique: 3, error: 0 (Success), outsize: 152
+OK: create returns.
+unique: 4, opcode: FORGET (2), nodeid: 1, insize: 48
+umount: /home/cse/lab-cse/lab1/yfs1: not mounted
