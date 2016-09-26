@@ -1,4 +1,5 @@
 #include "inode_manager.h"
+#include <cstring>
 
 // disk layer -----------------------------------------
 
@@ -17,6 +18,11 @@ disk::read_block(blockid_t id, char *buf)
    *put the content of target block into buf.
    *hint: use memcpy
   */
+  if (id < 0 || id >= BLOCK_NUM || buf == nullptr) {
+    return;
+  }
+
+  std::memcpy(buf, blocks[id], BLOCK_SIZE);
 }
 
 void
@@ -26,6 +32,11 @@ disk::write_block(blockid_t id, const char *buf)
    *your lab1 code goes here.
    *hint: just like read_block
   */
+  if (id < 0 || id >= BLOCK_NUM || buf == nullptr) {
+    return;
+  }
+
+  std::memcpy(blocks[id], buf, BLOCK_SIZE);
 }
 
 // block layer -----------------------------------------
