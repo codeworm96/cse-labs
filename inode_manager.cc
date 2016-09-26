@@ -54,7 +54,23 @@ block_manager::alloc_block()
           use bit operation.
           remind yourself of the layout of disk.
    */
-  return 0;
+  char buf[BLOCK_SIZE];
+  blockid_t cur = 0;
+  while (cur < sb.nblocks) {
+    read_block(BBLOCK(cur), buf);
+    for (int i = 0; i < BLOCK_SIZE && cur < sb.nblocks; ++i) {
+      unsigned char mask = 0x80;
+      while (mask > 0 && cur < sb.nblocks) {
+        if ((buf[i] & mask) == 0) {
+          buf[i] = buf[i] | mask;
+          write_block(BBLOCK(cur), buf);
+          return cur;
+        }
+        ++cur;
+      }
+    }
+  }
+  return cur;
 }
 
 void
@@ -64,6 +80,14 @@ block_manager::free_block(uint32_t id)
    * your lab1 code goes here.
    * note: you should unmark the corresponding bit in the block bitmap when free.
    */
+  char buf[BLOCK_SIZE];
+  read_block(BBLOCK(id), buf);
+
+  int index = (id % BPB) >> 3;
+  unsigned char mask = 0xFF ^ (1 << (7 - (index & 0x7)));
+  buf[index] = buf[index] & mask;
+
+  write_block(BBLOCK(id), buf);
 }
 
 // The layout of disk should be like this:
@@ -77,6 +101,25 @@ block_manager::block_manager()
   sb.nblocks = BLOCK_NUM;
   sb.ninodes = INODE_NUM;
 
+  /* mark bootblock, superblock, bitmap, inode table region as used */
+  char buf[BLOCK_SIZE];
+  blockid_t cur = 0;
+  blockid_t ending = sb.nblocks/BPB + sb.ninodes/IPB + 3;
+  while (cur < ending) {
+    read_block(BBLOCK(cur), buf);
+    for (int i = 0; i < BLOCK_SIZE && cur < ending; ++i) {
+      unsigned char mask = 0x80;
+      while (mask > 0 && cur < ending) {
+        buf[i] = buf[i] | mask;
+        ++cur;
+      }
+    }
+    write_block(BBLOCK(cur - 1), buf);
+  }
+
+  bzero(buf, sizeof(buf));
+  std::memcpy(buf, &sb, sizeof(sb));
+  write_block(1, buf);
 }
 
 void

@@ -69,7 +69,7 @@ class block_manager {
 
 typedef struct inode {
   //short type;
-  unsigned int type;
+  unsigned int type; // 0 for free
   unsigned int size;
   unsigned int atime;
   unsigned int mtime;
