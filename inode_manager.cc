@@ -191,6 +191,16 @@ inode_manager::free_inode(uint32_t inum)
    * if not, clear it, and remember to write back to disk.
    * do not forget to free memory if necessary.
    */
+  char buf[BLOCK_SIZE];
+  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
+  inode_t * ino = (inode_t *)(buf + (inum - 1) % IPB  * sizeof(inode_t));
+  if (ino->type == 0) {
+    printf("\tim: error! inode is already freed\n");
+    exit(0);
+  } else {
+    ino->type = 0;
+    bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
+  }
 }
 
 
@@ -431,4 +441,23 @@ inode_manager::remove_file(uint32_t inum)
    * note: you need to consider about both the data block and inode of the file
    * do not forget to free memory if necessary.
    */
+  inode_t * ino = get_inode(inum);
+  unsigned int block_num = (ino->size) / BLOCK_SIZE + !!((ino->size) % BLOCK_SIZE);
+  if (block_num <= NDIRECT) {
+    for (unsigned int i = 0; i < block_num; ++i) {
+      bm->free_block(ino->blocks[i]);
+    }
+  } else {
+    for (int i = 0; i < NDIRECT; ++i) {
+      bm->free_block(ino->blocks[i]);
+    }
+    char indirect[BLOCK_SIZE];
+    bm->read_block(ino->blocks[NDIRECT], indirect);
+    for (unsigned int i = 0; i < block_num - NDIRECT; ++i) {
+      bm->free_block(*((blockid_t *)indirect + i));
+    }
+    bm->free_block(ino->blocks[NDIRECT]);
+  }
+  free_inode(inum);
+  free(ino);
 }
