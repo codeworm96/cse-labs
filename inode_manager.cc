@@ -20,6 +20,7 @@ disk::read_block(blockid_t id, char *buf)
    *hint: use memcpy
   */
   if (id < 0 || id >= BLOCK_NUM || buf == NULL) {
+    printf("\tim: error! invalid blockid %d\n", id);
     return;
   }
 
@@ -34,6 +35,7 @@ disk::write_block(blockid_t id, const char *buf)
    *hint: just like read_block
   */
   if (id < 0 || id >= BLOCK_NUM || buf == NULL) {
+    printf("\tim: error! invalid blockid %d\n", id);
     return;
   }
 
@@ -72,7 +74,8 @@ block_manager::alloc_block()
       }
     }
   }
-  return cur;
+  printf("\tim: error! out of blocks\n");
+  exit(0);
 }
 
 void
@@ -179,7 +182,8 @@ inode_manager::alloc_inode(uint32_t type)
       ++cur;
     }
   }
-  return 0;
+  printf("\tim: error! out of inodes\n");
+  exit(0);
 }
 
 void
