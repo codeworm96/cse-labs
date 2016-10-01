@@ -1,5 +1,6 @@
 #include "inode_manager.h"
 #include <cstring>
+#include <ctime>
 
 // disk layer -----------------------------------------
 
@@ -18,7 +19,7 @@ disk::read_block(blockid_t id, char *buf)
    *put the content of target block into buf.
    *hint: use memcpy
   */
-  if (id < 0 || id >= BLOCK_NUM || buf == nullptr) {
+  if (id < 0 || id >= BLOCK_NUM || buf == NULL) {
     return;
   }
 
@@ -32,7 +33,7 @@ disk::write_block(blockid_t id, const char *buf)
    *your lab1 code goes here.
    *hint: just like read_block
   */
-  if (id < 0 || id >= BLOCK_NUM || buf == nullptr) {
+  if (id < 0 || id >= BLOCK_NUM || buf == NULL) {
     return;
   }
 
@@ -66,6 +67,7 @@ block_manager::alloc_block()
           write_block(BBLOCK(cur), buf);
           return cur;
         }
+        mask = mask >> 1;
         ++cur;
       }
     }
@@ -104,13 +106,14 @@ block_manager::block_manager()
   /* mark bootblock, superblock, bitmap, inode table region as used */
   char buf[BLOCK_SIZE];
   blockid_t cur = 0;
-  blockid_t ending = sb.nblocks/BPB + sb.ninodes/IPB + 3;
+  blockid_t ending = RESERVED_BLOCK(sb.ninodes, sb.nblocks);
   while (cur < ending) {
     read_block(BBLOCK(cur), buf);
     for (int i = 0; i < BLOCK_SIZE && cur < ending; ++i) {
       unsigned char mask = 0x80;
       while (mask > 0 && cur < ending) {
         buf[i] = buf[i] | mask;
+        mask = mask >> 1;
         ++cur;
       }
     }
@@ -158,7 +161,25 @@ inode_manager::alloc_inode(uint32_t type)
     
    * if you get some heap memory, do not forget to free it.
    */
-  return 1;
+  char buf[BLOCK_SIZE];
+  uint32_t cur = 1;
+  while (cur <= bm->sb.ninodes) {
+    bm->read_block(IBLOCK(cur, bm->sb.nblocks), buf);
+    for (int i = 0; i < IPB && cur <= bm->sb.ninodes; ++i) {
+      inode_t * ino = (inode_t *)(buf + i * sizeof(inode_t));
+      if (ino->type == 0) {
+        ino->type = type;
+        ino->size = 0;
+        ino->atime = std::time(0);
+        ino->mtime = std::time(0);
+        ino->ctime = std::time(0);
+        bm->write_block(IBLOCK(cur, bm->sb.nblocks), buf);
+        return cur;
+      }
+      ++cur;
+    }
+  }
+  return 0;
 }
 
 void
@@ -254,6 +275,17 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
    * note: get the attributes of inode inum.
    * you can refer to "struct attr" in extent_protocol.h
    */
+  struct inode * ino = get_inode(inum);
+
+  if (ino) {
+    a.type = ino->type;
+    a.atime = ino->atime;
+    a.mtime = ino->mtime;
+    a.ctime = ino->ctime;
+    a.size = ino->size;
+
+    free(ino);
+  }
 }
 
 void
