@@ -187,6 +187,20 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
+    std::string buf;
+    r = ec->get(ino, buf);
+    if (r != OK) {
+      printf("setattr: file not exist\n");
+      return r;
+    }
+
+    buf.resize(size);
+
+    r = ec->put(ino, buf);
+    if (r != OK) {
+      printf("setattr: update failed\n");
+      return r;
+    }
 
     return r;
 }
