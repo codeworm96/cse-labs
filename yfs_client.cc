@@ -205,13 +205,13 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_FILE, id);
+    r = ec->create(extent_protocol::T_FILE, ino_out);
     if (r != OK) {
       printf("create: creation failure\n");
       return r;
     }
     
-    table.insert(std::string(name), id);
+    table.insert(std::string(name), ino_out);
     r = ec->put(parent, table.dump());
     if (r != OK) {
       printf("create: parent directory update failed\n");
@@ -273,6 +273,15 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      * you should design the format of directory content.
      */
 
+    std::string buf;
+    r = ec->get(parent, buf);
+    if (r != OK) {
+      printf("create: parent directory not exist\n");
+      return r;
+    }
+
+    DirTable table(buf);
+    found = table.lookup(std::string(name), ino_out);
     return r;
 }
 
