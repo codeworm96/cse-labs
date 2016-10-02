@@ -102,6 +102,16 @@ yfs_client::DirTable::insert(std::string name, inum id)
   table.insert(std::pair<std::string, inum>(name, id));
 }
 
+void
+yfs_client::DirTable::list(std::list<dirent> & l)
+{
+  for (std::map<std::string, inum>::iterator it = table.begin(); it != table.end(); ++it) {
+    struct dirent entry;
+    entry.name = it->first;
+    entry.inum = it->second;
+    l.push_back(entry);
+  }
+}
 
 /** Your code here for Lab...
  * You may need to add routines such as
@@ -235,27 +245,27 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
-      printf("create: parent directory not exist\n");
+      printf("mkdir: parent directory not exist\n");
       return r;
     }
 
     inum id;
     DirTable table(buf);
     if (table.lookup(std::string(name), id)) {
-      printf("create: already exist\n");
+      printf("mkdir: already exist\n");
       return EXIST;
     }
 
     r = ec->create(extent_protocol::T_DIR, id);
     if (r != OK) {
-      printf("create: creation failure\n");
+      printf("mkdir: creation failure\n");
       return r;
     }
     
     table.insert(std::string(name), id);
     r = ec->put(parent, table.dump());
     if (r != OK) {
-      printf("create: parent directory update failed\n");
+      printf("mkdir: parent directory update failed\n");
       return r;
     }
 
@@ -276,7 +286,7 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
-      printf("create: parent directory not exist\n");
+      printf("lookup: parent directory not exist\n");
       return r;
     }
 
@@ -296,6 +306,15 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * and push the dirents to the list.
      */
 
+    std::string buf;
+    r = ec->get(dir, buf);
+    if (r != OK) {
+      printf("readdir: directory not exist\n");
+      return r;
+    }
+
+    DirTable table(buf);
+    table.list(list);
     return r;
 }
 
