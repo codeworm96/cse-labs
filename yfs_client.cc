@@ -232,6 +232,33 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
      * after create file or dir, you must remember to modify the parent infomation.
      */
 
+    std::string buf;
+    r = ec->get(parent, buf);
+    if (r != OK) {
+      printf("create: parent directory not exist\n");
+      return r;
+    }
+
+    inum id;
+    DirTable table(buf);
+    if (table.lookup(std::string(name), id)) {
+      printf("create: already exist\n");
+      return EXIST;
+    }
+
+    r = ec->create(extent_protocol::T_DIR, id);
+    if (r != OK) {
+      printf("create: creation failure\n");
+      return r;
+    }
+    
+    table.insert(std::string(name), id);
+    r = ec->put(parent, table.dump());
+    if (r != OK) {
+      printf("create: parent directory update failed\n");
+      return r;
+    }
+
     return r;
 }
 
