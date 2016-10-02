@@ -5,6 +5,8 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include <map>
+#include <utility>
 
 
 class yfs_client {
@@ -34,6 +36,16 @@ class yfs_client {
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
+
+  class DirTable {
+   private:
+     std::map<std::string, inum> table;
+   public:
+     DirTable(std::string);
+     std::string dump();
+     bool lookup(std::string, inum&);
+     void insert(std::string, inum);
+  };
 
  public:
   yfs_client();

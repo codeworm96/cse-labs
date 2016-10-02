@@ -39,6 +39,33 @@ yfs_client::filename(inum inum)
     return ost.str();
 }
 
+yfs_client::DirTable::DirTable(std::string s)
+{
+  size_t cur = 0;
+  size_t next;
+  while (cur < s.size()) {
+    next = s.find('/', cur);
+    std::string name = s.substr(cur, next - cur);
+    cur = next + 1;
+
+    next = s.find('/', cur);
+    inum id = n2i(s.substr(cur, next - cur));
+    cur = next + 1;
+
+    table.insert(std::pair<std::string, inum>(name, id));
+  }
+}
+
+std::string
+yfs_client::DirTable::dump()
+{
+  std::string res = "";
+  for (std::map<std::string, inum>::iterator it = table.begin(); it != table.end(); ++it) {
+    res = res + it->first + "/" + filename(it->second) + "/";
+  }
+  return res;
+}
+
 bool
 yfs_client::isfile(inum inum)
 {
@@ -56,6 +83,26 @@ yfs_client::isfile(inum inum)
     printf("isfile: %lld is a dir\n", inum);
     return false;
 }
+
+bool
+yfs_client::DirTable::lookup(std::string name, inum& res)
+{
+  std::map<std::string, inum>::iterator it = table.find(name);
+  if (it != table.end()) {
+    res = it->second;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void
+yfs_client::DirTable::insert(std::string name, inum id)
+{
+  table.insert(std::pair<std::string, inum>(name, id));
+}
+
+
 /** Your code here for Lab...
  * You may need to add routines such as
  * readlink, issymlink here to implement symbolic link.
@@ -144,6 +191,32 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
+    std::string buf;
+    r = ec->get(parent, buf);
+    if (r != OK) {
+      printf("create: parent directory not exist\n");
+      return r;
+    }
+
+    inum id;
+    DirTable table(buf);
+    if (table.lookup(std::string(name), id)) {
+      printf("create: already exist\n");
+      return EXIST;
+    }
+
+    r = ec->create(extent_protocol::T_FILE, id);
+    if (r != OK) {
+      printf("create: creation failure\n");
+      return r;
+    }
+    
+    table.insert(std::string(name), id);
+    r = ec->put(parent, table.dump());
+    if (r != OK) {
+      printf("create: parent directory update failed\n");
+      return r;
+    }
 
     return r;
 }
