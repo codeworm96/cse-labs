@@ -341,6 +341,18 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your lab2 code goes here.
      * note: read using ec->get().
      */
+    std::string buf;
+    r = ec->get(ino, buf);
+    if (r != OK) {
+      printf("read: file not exist\n");
+      return r;
+    }
+
+    if (off < (int)buf.size()) {
+      data = buf.substr(off, size);
+    } else {
+      data = "";
+    }
 
     return r;
 }
