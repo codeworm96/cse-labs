@@ -89,7 +89,7 @@ block_manager::free_block(uint32_t id)
   read_block(BBLOCK(id), buf);
 
   int index = (id % BPB) >> 3;
-  unsigned char mask = 0xFF ^ (1 << (7 - (index & 0x7)));
+  unsigned char mask = 0xFF ^ (1 << (7 - ((id % BPB) & 0x7)));
   buf[index] = buf[index] & mask;
 
   write_block(BBLOCK(id), buf);
@@ -321,21 +321,21 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
   char block[BLOCK_SIZE];
   char indirect[BLOCK_SIZE];
   inode_t * ino = get_inode(inum);
-  unsigned int old_block_num = (ino->size) / BLOCK_SIZE + !!((ino->size) % BLOCK_SIZE);
-  unsigned int new_block_num = size / BLOCK_SIZE + !!(size % BLOCK_SIZE);
+  unsigned int old_block_num = (ino->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  unsigned int new_block_num = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
   /* free some blocks */
   if (old_block_num > new_block_num) {
     if (new_block_num > NDIRECT) {
       bm->read_block(ino->blocks[NDIRECT], indirect);
       for (unsigned int i = new_block_num; i < old_block_num; ++i) {
-        bm->free_block(*((blockid_t *)indirect + i - NDIRECT));
+        bm->free_block(*((blockid_t *)indirect + (i - NDIRECT)));
       }
     } else {
       if (old_block_num > NDIRECT) {
         bm->read_block(ino->blocks[NDIRECT], indirect);
         for (unsigned int i = NDIRECT; i < old_block_num; ++i) {
-          bm->free_block(*((blockid_t *)indirect + i - NDIRECT));
+          bm->free_block(*((blockid_t *)indirect + (i - NDIRECT)));
         }
         bm->free_block(ino->blocks[NDIRECT]);
         for (unsigned int i = new_block_num; i < NDIRECT; ++i) {
@@ -362,15 +362,15 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
         }
         ino->blocks[NDIRECT] = bm->alloc_block();
 
-        bm->read_block(ino->blocks[NDIRECT], indirect);
+        bzero(indirect, BLOCK_SIZE);
         for (unsigned int i = NDIRECT; i < new_block_num; ++i) {
-          *((blockid_t *)indirect + i - NDIRECT) = bm->alloc_block();
+          *((blockid_t *)indirect + (i - NDIRECT)) = bm->alloc_block();
         }
         bm->write_block(ino->blocks[NDIRECT], indirect);
       } else {
         bm->read_block(ino->blocks[NDIRECT], indirect);
         for (unsigned int i = old_block_num; i < new_block_num; ++i) {
-          *((blockid_t *)indirect + i - NDIRECT) = bm->alloc_block();
+          *((blockid_t *)indirect + (i - NDIRECT)) = bm->alloc_block();
         }
         bm->write_block(ino->blocks[NDIRECT], indirect);
       }

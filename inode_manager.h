@@ -56,10 +56,10 @@ class block_manager {
 //(BLOCK_SIZE / sizeof(struct inode))
 
 // reserved blocks
-#define RESERVED_BLOCK(ninodes, nblocks)     (2 + (nblocks)/BPB + !!((nblocks)%BPB) + (ninodes)/IPB + !!((ninodes)%IPB))
+#define RESERVED_BLOCK(ninodes, nblocks)     (2 + ((nblocks) + BPB - 1)/BPB + ((ninodes) + IPB - 1)/IPB)
 
 // Block containing inode i
-#define IBLOCK(i, nblocks)     (2 + (nblocks)/BPB + !!((nblocks)%BPB) + ((i)-1)/IPB)
+#define IBLOCK(i, nblocks)     (2 + ((nblocks) + BPB - 1)/BPB + ((i)-1)/IPB)
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
