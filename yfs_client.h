@@ -46,6 +46,7 @@ class yfs_client {
      bool lookup(std::string, inum&);
      void insert(std::string, inum);
      void list(std::list<dirent>&);
+     void erase(std::string);
   };
 
  public:

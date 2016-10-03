@@ -39,6 +39,31 @@ yfs_client::filename(inum inum)
     return ost.str();
 }
 
+
+bool
+yfs_client::isfile(inum inum)
+{
+    extent_protocol::attr a;
+
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        printf("error getting attr\n");
+        return false;
+    }
+
+    if (a.type == extent_protocol::T_FILE) {
+        printf("isfile: %lld is a file\n", inum);
+        return true;
+    } 
+    printf("isfile: %lld is a dir\n", inum);
+    return false;
+}
+
+/** Your code here for Lab...
+ * You may need to add routines such as
+ * readlink, issymlink here to implement symbolic link.
+ * 
+ * */
+
 yfs_client::DirTable::DirTable(std::string s)
 {
   size_t cur = 0;
@@ -64,24 +89,6 @@ yfs_client::DirTable::dump()
     res = res + it->first + "/" + filename(it->second) + "/";
   }
   return res;
-}
-
-bool
-yfs_client::isfile(inum inum)
-{
-    extent_protocol::attr a;
-
-    if (ec->getattr(inum, a) != extent_protocol::OK) {
-        printf("error getting attr\n");
-        return false;
-    }
-
-    if (a.type == extent_protocol::T_FILE) {
-        printf("isfile: %lld is a file\n", inum);
-        return true;
-    } 
-    printf("isfile: %lld is a dir\n", inum);
-    return false;
 }
 
 bool
@@ -113,11 +120,11 @@ yfs_client::DirTable::list(std::list<dirent> & l)
   }
 }
 
-/** Your code here for Lab...
- * You may need to add routines such as
- * readlink, issymlink here to implement symbolic link.
- * 
- * */
+void
+yfs_client::DirTable::erase(std::string name)
+{
+    table.erase(name);
+}
 
 bool
 yfs_client::isdir(inum inum)
@@ -187,6 +194,7 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
+
     std::string buf;
     r = ec->get(ino, buf);
     if (r != OK) {
@@ -215,6 +223,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
+
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
@@ -270,13 +279,13 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_DIR, id);
+    r = ec->create(extent_protocol::T_DIR, ino_out);
     if (r != OK) {
       printf("mkdir: creation failure\n");
       return r;
     }
     
-    table.insert(std::string(name), id);
+    table.insert(std::string(name), ino_out);
     r = ec->put(parent, table.dump());
     if (r != OK) {
       printf("mkdir: parent directory update failed\n");
@@ -403,6 +412,33 @@ int yfs_client::unlink(inum parent,const char *name)
      * and update the parent directory content.
      */
 
+    std::string buf;
+    r = ec->get(parent, buf);
+    if (r != OK) {
+      printf("unlink: parent directory not exist\n");
+      return r;
+    }
+
+    inum id;
+    DirTable table(buf);
+    if (!table.lookup(std::string(name), id)) {
+      printf("unlink: file not found\n");
+      return NOENT;
+    }
+
+    table.erase(std::string(name));
+    r = ec->put(parent, table.dump());
+    if (r != OK) {
+      printf("unlink: parent directory update failed\n");
+      return r;
+    }
+
+    r = ec->remove(id);
+    if (r != OK) {
+      printf("unlink: remove failed\n");
+      return r;
+    }
+    
     return r;
 }
 
