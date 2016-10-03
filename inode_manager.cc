@@ -169,7 +169,7 @@ inode_manager::alloc_inode(uint32_t type)
   while (cur <= bm->sb.ninodes) {
     bm->read_block(IBLOCK(cur, bm->sb.nblocks), buf);
     for (int i = 0; i < IPB && cur <= bm->sb.ninodes; ++i) {
-      inode_t * ino = (inode_t *)(buf + i * sizeof(inode_t));
+      inode_t * ino = (inode_t *)buf + i;
       if (ino->type == 0) {
         ino->type = type;
         ino->size = 0;
@@ -197,7 +197,7 @@ inode_manager::free_inode(uint32_t inum)
    */
   char buf[BLOCK_SIZE];
   bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
-  inode_t * ino = (inode_t *)(buf + (inum - 1) % IPB  * sizeof(inode_t));
+  inode_t * ino = (inode_t *)buf + (inum - 1) % IPB;
   if (ino->type == 0) {
     printf("\tim: error! inode is already freed\n");
     exit(0);
@@ -206,7 +206,6 @@ inode_manager::free_inode(uint32_t inum)
     bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
   }
 }
-
 
 /* Return an inode structure by inum, NULL otherwise.
  * Caller should release the memory. */
@@ -218,7 +217,7 @@ inode_manager::get_inode(uint32_t inum)
 
   printf("\tim: get_inode %d\n", inum);
 
-  if (inum < 0 || inum >= INODE_NUM) {
+  if (inum <= 0 || inum > INODE_NUM) {
     printf("\tim: inum out of range\n");
     return NULL;
   }
@@ -446,7 +445,7 @@ inode_manager::remove_file(uint32_t inum)
    * do not forget to free memory if necessary.
    */
   inode_t * ino = get_inode(inum);
-  unsigned int block_num = (ino->size) / BLOCK_SIZE + !!((ino->size) % BLOCK_SIZE);
+  unsigned int block_num = (ino->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
   if (block_num <= NDIRECT) {
     for (unsigned int i = 0; i < block_num; ++i) {
       bm->free_block(ino->blocks[i]);
