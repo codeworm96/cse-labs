@@ -368,6 +368,27 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
      */
+    std::string buf;
+    r = ec->get(ino, buf);
+    if (r != OK) {
+      printf("write: file not exist\n");
+      return r;
+    }
+
+    if (buf.size() < off + size) {
+      buf.resize(off + size);
+    }
+
+    for (unsigned int i = 0; i < size; ++i) {
+      buf[off + i] = data[i];
+    }
+
+    r = ec->put(ino, buf);
+    if (r != OK) {
+      printf("write: failed\n");
+      return r;
+    }
+    bytes_written = size;
 
     return r;
 }
