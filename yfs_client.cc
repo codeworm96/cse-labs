@@ -350,6 +350,7 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your lab2 code goes here.
      * note: read using ec->get().
      */
+
     std::string buf;
     r = ec->get(ino, buf);
     if (r != OK) {
@@ -377,6 +378,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
      */
+
     std::string buf;
     r = ec->get(ino, buf);
     if (r != OK) {
