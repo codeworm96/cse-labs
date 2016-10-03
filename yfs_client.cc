@@ -54,7 +54,7 @@ yfs_client::isfile(inum inum)
         printf("isfile: %lld is a file\n", inum);
         return true;
     } 
-    printf("isfile: %lld is a dir\n", inum);
+    printf("isfile: %lld is not a file\n", inum);
     return false;
 }
 
@@ -129,8 +129,37 @@ yfs_client::DirTable::erase(std::string name)
 bool
 yfs_client::isdir(inum inum)
 {
-    // Oops! is this still correct when you implement symlink?
-    return ! isfile(inum);
+    extent_protocol::attr a;
+
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        printf("error getting attr\n");
+        return false;
+    }
+
+    if (a.type == extent_protocol::T_DIR) {
+        printf("isdir: %lld is a directory\n", inum);
+        return true;
+    } 
+    printf("isdir: %lld is not a directory\n", inum);
+    return false;
+}
+
+bool
+yfs_client::issymlink(inum inum)
+{
+    extent_protocol::attr a;
+
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        printf("error getting attr\n");
+        return false;
+    }
+
+    if (a.type == extent_protocol::T_SYMLINK) {
+        printf("issymlink: %lld is a symbolic link\n", inum);
+        return true;
+    } 
+    printf("issymlink: %lld is not a symbolic link\n", inum);
+    return false;
 }
 
 int
@@ -441,6 +470,23 @@ int yfs_client::unlink(inum parent,const char *name)
       return r;
     }
     
+    return r;
+}
+
+int
+yfs_client::readlink(inum ino, std::string &data)
+{
+    int r = OK;
+
+    std::string buf;
+    r = ec->get(ino, buf);
+    if (r != OK) {
+      printf("read: file not exist\n");
+      return r;
+    }
+
+    data = buf;
+
     return r;
 }
 
