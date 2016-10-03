@@ -72,6 +72,7 @@ getattr(yfs_client::inum inum, struct stat &st)
     } else {
         yfs_client::fileinfo info;
         ret = yfs->getfile(inum, info);
+        printf("fuck: %d\n", ret);
         if(ret != yfs_client::OK)
             return ret;
         st.st_mode = S_IFLNK | 0777;
@@ -151,7 +152,11 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 #endif
 
     } else {
-        fuse_reply_err(req, ENOSYS);
+        // do nothing. just avoid annoying error messages
+        struct stat st;
+        getattr(ino, st);
+        fuse_reply_attr(req, &st, 0);
+        // fuse_reply_err(req, ENOSYS);
     }
 }
 
@@ -489,10 +494,11 @@ fuseserver_symlink(fuse_req_t req, const char * link,
         fuse_ino_t parent, const char * name)
 {
     yfs_client::inum inum = parent;
+    yfs_client::inum id;
     yfs_client::status ret;
     struct fuse_entry_param e;
 
-    ret = yfs->symlink(inum, name, link);
+    ret = yfs->symlink(inum, name, link, id);
     if (ret != yfs_client::OK) {
         if (ret == yfs_client::EXIST) {
             fuse_reply_err(req, EEXIST);
@@ -502,11 +508,11 @@ fuseserver_symlink(fuse_req_t req, const char * link,
         return;
     }
 
-    e.ino = inum;
+    e.ino = id;
     e.attr_timeout = 0.0;
     e.entry_timeout = 0.0;
     e.generation = 0;
-    ret = getattr(inum, e.attr);
+    ret = getattr(id, e.attr);
 
     if (ret != yfs_client::OK) {
         fuse_reply_err(req, ENOENT);

@@ -491,7 +491,7 @@ yfs_client::readlink(inum ino, std::string &data)
 }
 
 int
-yfs_client::symlink(inum parent, const char * name, const char * link)
+yfs_client::symlink(inum parent, const char * name, const char * link, inum & ino_out)
 {
     int r = OK;
 
@@ -509,19 +509,19 @@ yfs_client::symlink(inum parent, const char * name, const char * link)
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_SYMLINK, id);
+    r = ec->create(extent_protocol::T_SYMLINK, ino_out);
     if (r != OK) {
       printf("symlink: creation failure\n");
       return r;
     }
 
-    r = ec->put(id, std::string(link));
+    r = ec->put(ino_out, std::string(link));
     if (r != OK) {
       printf("symlink: writing failed\n");
       return r;
     }
     
-    table.insert(std::string(name), id);
+    table.insert(std::string(name), ino_out);
     r = ec->put(parent, table.dump());
     if (r != OK) {
       printf("symlink: parent directory update failed\n");
