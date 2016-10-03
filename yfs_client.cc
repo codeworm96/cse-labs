@@ -490,3 +490,43 @@ yfs_client::readlink(inum ino, std::string &data)
     return r;
 }
 
+int
+yfs_client::symlink(inum parent, const char * name, const char * link)
+{
+    int r = OK;
+
+    std::string buf;
+    r = ec->get(parent, buf);
+    if (r != OK) {
+      printf("symlink: parent directory not exist\n");
+      return r;
+    }
+
+    inum id;
+    DirTable table(buf);
+    if (table.lookup(std::string(name), id)) {
+      printf("symlink: already exist\n");
+      return EXIST;
+    }
+
+    r = ec->create(extent_protocol::T_SYMLINK, id);
+    if (r != OK) {
+      printf("symlink: creation failure\n");
+      return r;
+    }
+
+    r = ec->put(id, std::string(link));
+    if (r != OK) {
+      printf("symlink: writing failed\n");
+      return r;
+    }
+    
+    table.insert(std::string(name), id);
+    r = ec->put(parent, table.dump());
+    if (r != OK) {
+      printf("symlink: parent directory update failed\n");
+      return r;
+    }
+
+    return r;
+}

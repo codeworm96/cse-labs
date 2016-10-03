@@ -484,6 +484,38 @@ fuseserver_readlink(fuse_req_t req, fuse_ino_t ino)
     fuse_reply_readlink(req, buf.c_str());
 }
 
+void
+fuseserver_symlink(fuse_req_t req, const char * link,
+        fuse_ino_t parent, const char * name)
+{
+    yfs_client::inum inum = parent;
+    yfs_client::status ret;
+    struct fuse_entry_param e;
+
+    ret = yfs->symlink(inum, name, link);
+    if (ret != yfs_client::OK) {
+        if (ret == yfs_client::EXIST) {
+            fuse_reply_err(req, EEXIST);
+        }else{
+            fuse_reply_err(req, ENOENT);
+        }
+        return;
+    }
+
+    e.ino = inum;
+    e.attr_timeout = 0.0;
+    e.entry_timeout = 0.0;
+    e.generation = 0;
+    ret = getattr(inum, e.attr);
+
+    if (ret != yfs_client::OK) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    fuse_reply_entry(req, &e);
+}
+
 struct fuse_lowlevel_ops fuseserver_oper;
 
 int
@@ -532,6 +564,7 @@ main(int argc, char *argv[])
      * rmdir, etc.
      * */
     fuseserver_oper.readlink   = fuseserver_readlink;
+    fuseserver_oper.symlink   = fuseserver_symlink;
 
     const char *fuse_argv[20];
     int fuse_argc = 0;
