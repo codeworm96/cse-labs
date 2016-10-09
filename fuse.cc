@@ -72,7 +72,6 @@ getattr(yfs_client::inum inum, struct stat &st)
     } else {
         yfs_client::fileinfo info;
         ret = yfs->getfile(inum, info);
-        printf("fuck: %d\n", ret);
         if(ret != yfs_client::OK)
             return ret;
         st.st_mode = S_IFLNK | 0777;
@@ -188,8 +187,6 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
-
-
 }
 
 //
@@ -570,7 +567,7 @@ main(int argc, char *argv[])
      * rmdir, etc.
      * */
     fuseserver_oper.readlink   = fuseserver_readlink;
-    fuseserver_oper.symlink   = fuseserver_symlink;
+    fuseserver_oper.symlink    = fuseserver_symlink;
 
     const char *fuse_argv[20];
     int fuse_argc = 0;
