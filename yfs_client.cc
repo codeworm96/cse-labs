@@ -13,7 +13,6 @@
 yfs_client::yfs_client()
 {
     ec = new extent_client();
-
 }
 */
 //yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
@@ -40,7 +39,6 @@ yfs_client::filename(inum inum)
     ost << inum;
     return ost.str();
 }
-
 
 bool
 yfs_client::isfile(inum inum)
