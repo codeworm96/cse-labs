@@ -151,7 +151,11 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 #endif
 
     } else {
-        fuse_reply_err(req, ENOSYS);
+        // do nothing. just avoid annoying error messages
+        struct stat st;
+        getattr(ino, st);
+        fuse_reply_attr(req, &st, 0);
+        // fuse_reply_err(req, ENOSYS);
     }
 }
 
