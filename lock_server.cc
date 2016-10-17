@@ -5,10 +5,13 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <map>
 
 lock_server::lock_server():
   nacquire (0)
 {
+  pthread_mutex_init(&map_mutex, NULL);
 }
 
 lock_protocol::status
@@ -25,6 +28,15 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
 	// Your lab4 code goes here
+  pthread_mutex_lock(&map_mutex);
+  if (locks.find(lid) != locks.end()) {
+    while (locks[lid] == true) {
+      pthread_mutex_unlock(&map_mutex);
+      pthread_mutex_lock(&map_mutex);
+    }
+  }
+  locks[lid] = true;
+  pthread_mutex_unlock(&map_mutex);
   return ret;
 }
 
@@ -33,5 +45,8 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
 	// Your lab4 code goes here
+  pthread_mutex_lock(&map_mutex);
+  locks[lid] = false;
+  pthread_mutex_unlock(&map_mutex);
   return ret;
 }
