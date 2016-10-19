@@ -1,6 +1,7 @@
 #include "inode_manager.h"
 #include <cstring>
 #include <ctime>
+#include <pthread.h>
 
 // disk layer -----------------------------------------
 
@@ -53,6 +54,8 @@ block_manager::alloc_block()
    * note: you should mark the corresponding bit in block bitmap when alloc.
    * you need to think about which block you can start to be allocated.
    */
+  // use lock to ensure allocation is thread-safe
+  pthread_mutex_lock(&bitmap_mutex);
   char buf[BLOCK_SIZE];
   blockid_t cur = 0;
   while (cur < sb.nblocks) {
@@ -63,6 +66,7 @@ block_manager::alloc_block()
         if ((buf[i] & mask) == 0) {
           buf[i] = buf[i] | mask;
           write_block(BBLOCK(cur), buf);
+          pthread_mutex_unlock(&bitmap_mutex);
           return cur;
         }
         mask = mask >> 1;
@@ -71,6 +75,7 @@ block_manager::alloc_block()
     }
   }
   printf("\tim: error! out of blocks\n");
+  pthread_mutex_unlock(&bitmap_mutex);
   exit(0);
 }
 
@@ -81,6 +86,8 @@ block_manager::free_block(uint32_t id)
    * your lab1 code goes here.
    * note: you should unmark the corresponding bit in the block bitmap when free.
    */
+  // use lock to ensure free is thread-safe
+  pthread_mutex_lock(&bitmap_mutex);
   char buf[BLOCK_SIZE];
   read_block(BBLOCK(id), buf);
 
@@ -89,6 +96,7 @@ block_manager::free_block(uint32_t id)
   buf[index] = buf[index] & mask;
 
   write_block(BBLOCK(id), buf);
+  pthread_mutex_unlock(&bitmap_mutex);
 }
 
 // The layout of disk should be like this:
@@ -122,6 +130,8 @@ block_manager::block_manager()
   bzero(buf, sizeof(buf));
   std::memcpy(buf, &sb, sizeof(sb));
   write_block(1, buf);
+
+  pthread_mutex_init(&bitmap_mutex, NULL);
 }
 
 void
@@ -146,6 +156,7 @@ inode_manager::inode_manager()
     printf("\tim: error! alloc first inode %d, should be 1\n", root_dir);
     exit(0);
   }
+  pthread_mutex_init(&inodes_mutex, NULL);
 }
 
 /* Create a new file.
@@ -158,6 +169,8 @@ inode_manager::alloc_inode(uint32_t type)
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
+  // use lock to ensure allocation is thread-safe
+  pthread_mutex_lock(&inodes_mutex);
   char buf[BLOCK_SIZE];
   uint32_t cur = 1;
   while (cur <= bm->sb.ninodes) {
@@ -171,12 +184,14 @@ inode_manager::alloc_inode(uint32_t type)
         ino->mtime = std::time(0);
         ino->ctime = std::time(0);
         bm->write_block(IBLOCK(cur, bm->sb.nblocks), buf);
+        pthread_mutex_unlock(&inodes_mutex);
         return cur;
       }
       ++cur;
     }
   }
   printf("\tim: error! out of inodes\n");
+  pthread_mutex_unlock(&inodes_mutex);
   exit(0);
 }
 
@@ -188,15 +203,19 @@ inode_manager::free_inode(uint32_t inum)
    * note: you need to check if the inode is already a freed one;
    * if not, clear it, and remember to write back to disk.
    */
+  // use lock to ensure free is thread-safe
+  pthread_mutex_lock(&inodes_mutex);
   char buf[BLOCK_SIZE];
   bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
   inode_t * ino = (inode_t *)buf + (inum - 1) % IPB;
   if (ino->type == 0) {
     printf("\tim: error! inode is already freed\n");
+    pthread_mutex_unlock(&inodes_mutex);
     exit(0);
   } else {
     ino->type = 0;
     bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
+    pthread_mutex_unlock(&inodes_mutex);
   }
 }
 

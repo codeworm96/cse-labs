@@ -4,6 +4,7 @@
 #define inode_h
 
 #include <stdint.h>
+#include <pthread.h>
 #include "extent_protocol.h" // TODO: delete it
 
 #define DISK_SIZE  1024*1024*16
@@ -36,6 +37,7 @@ class block_manager {
  private:
   disk *d;
   std::map <uint32_t, int> using_blocks;
+  pthread_mutex_t bitmap_mutex; 
  public:
   block_manager();
   struct superblock sb;
@@ -54,6 +56,7 @@ class block_manager {
 // Inodes per block.
 #define IPB           1
 //(BLOCK_SIZE / sizeof(struct inode))
+// IPB=1 is important for thread-safe
 
 // reserved blocks
 #define RESERVED_BLOCK(ninodes, nblocks)     (2 + ((nblocks) + BPB - 1)/BPB + ((ninodes) + IPB - 1)/IPB)
@@ -83,6 +86,7 @@ typedef struct inode {
 class inode_manager {
  private:
   block_manager *bm;
+  pthread_mutex_t inodes_mutex; 
   struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
 
