@@ -13,8 +13,10 @@ yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
   lc = new lock_client(lock_dst);
+  lc->acquire(1);
   if (ec->put(1, "") != extent_protocol::OK)
       printf("error init root dir\n"); // XYB: init root dir
+  lc->release(1);
 }
 
 
@@ -219,10 +221,12 @@ yfs_client::setattr(inum ino, size_t size)
      * according to the size (<, =, or >) content length.
      */
 
+    lc->acquire(ino);
     std::string buf;
     r = ec->get(ino, buf);
     if (r != OK) {
       printf("setattr: file not exist\n");
+      lc->release(ino);
       return r;
     }
 
@@ -231,9 +235,11 @@ yfs_client::setattr(inum ino, size_t size)
     r = ec->put(ino, buf);
     if (r != OK) {
       printf("setattr: update failed\n");
+      lc->release(ino);
       return r;
     }
 
+    lc->release(ino);
     return r;
 }
 
@@ -248,10 +254,12 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * after create file or dir, you must remember to modify the parent infomation.
      */
 
+    lc->acquire(parent);
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("create: parent directory not exist\n");
+      lc->release(parent);
       return r;
     }
 
@@ -259,17 +267,20 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
     DirTable table(buf);
     if (table.lookup(std::string(name), id)) {
       printf("create: already exist\n");
+      lc->release(parent);
       return EXIST;
     }
 
     r = ec->create(extent_protocol::T_FILE, ino_out);
     if (r != OK) {
       printf("create: creation failure\n");
+      lc->release(parent);
       return r;
     }
     
     table.insert(std::string(name), ino_out);
     r = ec->put(parent, table.dump());
+    lc->release(parent);
     if (r != OK) {
       printf("create: parent directory update failed\n");
       return r;
@@ -289,10 +300,12 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
      * after create file or dir, you must remember to modify the parent infomation.
      */
 
+    lc->acquire(parent);
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("mkdir: parent directory not exist\n");
+      lc->release(parent);
       return r;
     }
 
@@ -300,17 +313,20 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
     DirTable table(buf);
     if (table.lookup(std::string(name), id)) {
       printf("mkdir: already exist\n");
+      lc->release(parent);
       return EXIST;
     }
 
     r = ec->create(extent_protocol::T_DIR, ino_out);
     if (r != OK) {
       printf("mkdir: creation failure\n");
+      lc->release(parent);
       return r;
     }
     
     table.insert(std::string(name), ino_out);
     r = ec->put(parent, table.dump());
+    lc->release(parent);
     if (r != OK) {
       printf("mkdir: parent directory update failed\n");
       return r;
@@ -330,8 +346,10 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      * you should design the format of directory content.
      */
 
+    lc->acquire(parent);
     std::string buf;
     r = ec->get(parent, buf);
+    lc->release(parent);
     if (r != OK) {
       printf("lookup: parent directory not exist\n");
       return r;
@@ -353,8 +371,10 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * and push the dirents to the list.
      */
 
+    lc->acquire(dir);
     std::string buf;
     r = ec->get(dir, buf);
+    lc->release(dir);
     if (r != OK) {
       printf("readdir: directory not exist\n");
       return r;
@@ -375,8 +395,10 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * note: read using ec->get().
      */
 
+    lc->acquire(ino);
     std::string buf;
     r = ec->get(ino, buf);
+    lc->release(ino);
     if (r != OK) {
       printf("read: file not exist\n");
       return r;
@@ -403,10 +425,12 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * when off > length of original file, fill the holes with '\0'.
      */
 
+    lc->acquire(ino);
     std::string buf;
     r = ec->get(ino, buf);
     if (r != OK) {
       printf("write: file not exist\n");
+      lc->release(ino);
       return r;
     }
 
@@ -419,6 +443,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
     }
 
     r = ec->put(ino, buf);
+    lc->release(ino);
     if (r != OK) {
       printf("write: failed\n");
       return r;
@@ -438,10 +463,12 @@ int yfs_client::unlink(inum parent,const char *name)
      * and update the parent directory content.
      */
 
+    lc->acquire(parent);
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("unlink: parent directory not exist\n");
+      lc->release(parent);
       return r;
     }
 
@@ -449,17 +476,21 @@ int yfs_client::unlink(inum parent,const char *name)
     DirTable table(buf);
     if (!table.lookup(std::string(name), id)) {
       printf("unlink: file not found\n");
+      lc->release(parent);
       return NOENT;
     }
 
     table.erase(std::string(name));
     r = ec->put(parent, table.dump());
+    lc->release(parent);
     if (r != OK) {
       printf("unlink: parent directory update failed\n");
       return r;
     }
 
+    lc->acquire(id);
     r = ec->remove(id);
+    lc->release(id);
     if (r != OK) {
       printf("unlink: remove failed\n");
       return r;
@@ -473,8 +504,10 @@ yfs_client::readlink(inum ino, std::string &data)
 {
     int r = OK;
 
+    lc->acquire(ino);
     std::string buf;
     r = ec->get(ino, buf);
+    lc->release(ino);
     if (r != OK) {
       printf("read: file not exist\n");
       return r;
@@ -490,10 +523,12 @@ yfs_client::symlink(inum parent, const char * name, const char * link, inum & in
 {
     int r = OK;
 
+    lc->acquire(parent);
     std::string buf;
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("symlink: parent directory not exist\n");
+      lc->release(parent);
       return r;
     }
 
@@ -501,18 +536,21 @@ yfs_client::symlink(inum parent, const char * name, const char * link, inum & in
     DirTable table(buf);
     if (table.lookup(std::string(name), id)) {
       printf("symlink: already exist\n");
+      lc->release(parent);
       return EXIST;
     }
 
     r = ec->create(extent_protocol::T_SYMLINK, ino_out);
     if (r != OK) {
       printf("symlink: creation failure\n");
+      lc->release(parent);
       return r;
     }
 
     r = ec->put(ino_out, std::string(link));
     if (r != OK) {
       printf("symlink: writing failed\n");
+      lc->release(parent);
       return r;
     }
     
@@ -520,8 +558,10 @@ yfs_client::symlink(inum parent, const char * name, const char * link, inum & in
     r = ec->put(parent, table.dump());
     if (r != OK) {
       printf("symlink: parent directory update failed\n");
+      lc->release(parent);
       return r;
     }
 
+    lc->release(parent);
     return r;
 }
