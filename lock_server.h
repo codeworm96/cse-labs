@@ -13,8 +13,17 @@
 
 class lock_server {
  private:
+  struct Lock {
+      bool granted;
+      pthread_cond_t wait;
+      Lock() {
+          granted = true;
+          pthread_cond_init(&wait, NULL);
+      }
+  };
+
   pthread_mutex_t map_mutex;
-  std::map<lock_protocol::lockid_t, bool> locks;
+  std::map<lock_protocol::lockid_t, Lock> locks;
 
  protected:
   int nacquire;
@@ -28,10 +37,4 @@ class lock_server {
 };
 
 #endif 
-
-
-
-
-
-
 

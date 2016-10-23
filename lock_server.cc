@@ -30,12 +30,11 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 	// Your lab4 code goes here
   pthread_mutex_lock(&map_mutex);
   if (locks.find(lid) != locks.end()) {
-    while (locks[lid] == true) {
-      pthread_mutex_unlock(&map_mutex);
-      pthread_mutex_lock(&map_mutex);
+    while (locks[lid].granted == true) {
+        pthread_cond_wait(&locks[lid].wait, &map_mutex);
     }
   }
-  locks[lid] = true;
+  locks[lid].granted = true;
   pthread_mutex_unlock(&map_mutex);
   return ret;
 }
@@ -46,7 +45,8 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
   lock_protocol::status ret = lock_protocol::OK;
 	// Your lab4 code goes here
   pthread_mutex_lock(&map_mutex);
-  locks[lid] = false;
+  locks[lid].granted = false;
   pthread_mutex_unlock(&map_mutex);
+  pthread_cond_signal(&locks[lid].wait);
   return ret;
 }
