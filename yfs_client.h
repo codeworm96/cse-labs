@@ -9,6 +9,8 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include <map>
+#include <utility>
 
 
 #define CA_FILE "./cert/ca.pem"
@@ -62,12 +64,27 @@ class yfs_client {
   static std::string filename(inum);
   static inum n2i(std::string);
 
+  class DirTable {
+   private:
+     std::map<std::string, inum> table;
+   public:
+     DirTable(std::string);
+     std::string dump();
+     bool lookup(std::string, inum&);
+     void insert(std::string, inum);
+     void list(std::list<dirent>&);
+     void erase(std::string);
+  };
+
  public:
   yfs_client();
   yfs_client(std::string, std::string, const char*);
+  yfs_client(std::string, std::string);
+  yfs_client(std::string);
 
   bool isfile(inum);
   bool isdir(inum);
+  bool issymlink(inum);
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
@@ -80,8 +97,19 @@ class yfs_client {
   int read(inum, size_t, off_t, std::string &);
   int unlink(inum,const char *);
   int mkdir(inum , const char *, mode_t , inum &);
+<<<<<<< HEAD
 
   int verify(const char* cert_file, unsigned short*);
+=======
+  
+  /** you may need to add symbolic link related methods here.*/
+  int readlink(inum, std::string &);
+  int symlink(inum, const char *, const char *, inum &);
+
+  void commit();
+  void undo();
+  void redo();
+>>>>>>> lab6
 };
 
 #endif 

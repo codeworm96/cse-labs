@@ -4,6 +4,7 @@
 #define inode_h
 
 #include <stdint.h>
+#include <pthread.h>
 #include "extent_protocol.h" // TODO: delete it
 
 #define DISK_SIZE  1024*1024*16
@@ -30,12 +31,16 @@ typedef struct superblock {
   uint32_t size;
   uint32_t nblocks;
   uint32_t ninodes;
+  uint32_t version;
+  uint32_t next_inode;
+  uint32_t inode_end;
 } superblock_t;
 
 class block_manager {
  private:
   disk *d;
   std::map <uint32_t, int> using_blocks;
+  pthread_mutex_t bitmap_mutex; 
  public:
   block_manager();
   struct superblock sb;
@@ -48,14 +53,19 @@ class block_manager {
 
 // inode layer -----------------------------------------
 
+// begin from 1
 #define INODE_NUM  1024
 
 // Inodes per block.
 #define IPB           1
 //(BLOCK_SIZE / sizeof(struct inode))
+// IPB=1 is important for thread-safe
+
+// reserved blocks
+#define RESERVED_BLOCK(ninodes, nblocks)     (2 + ((nblocks) + BPB - 1)/BPB + ((ninodes) + IPB - 1)/IPB)
 
 // Block containing inode i
-#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)
+#define IBLOCK(i, nblocks)     (2 + ((nblocks) + BPB - 1)/BPB + ((i)-1)/IPB)
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
@@ -68,7 +78,10 @@ class block_manager {
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 typedef struct inode {
-  short type;
+  short commit; // -1 for normal record
+  short type; // 0 for free
+  unsigned int inum;
+  unsigned int pos;
   unsigned int size;
   unsigned int atime;
   unsigned int mtime;
@@ -79,17 +92,20 @@ typedef struct inode {
 class inode_manager {
  private:
   block_manager *bm;
+  pthread_mutex_t inodes_mutex; 
   struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
 
  public:
   inode_manager();
   uint32_t alloc_inode(uint32_t type);
-  void free_inode(uint32_t inum);
   void read_file(uint32_t inum, char **buf, int *size);
   void write_file(uint32_t inum, const char *buf, int size);
   void remove_file(uint32_t inum);
   void getattr(uint32_t inum, extent_protocol::attr &a);
+  void commit();
+  void undo();
+  void redo();
 };
 
 #endif
