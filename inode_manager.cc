@@ -2,6 +2,7 @@
 #include <cstring>
 #include <ctime>
 #include <pthread.h>
+#include <cstdint>
 
 #define WRITE_AMPLIFICATION 4
 
@@ -96,16 +97,87 @@ block_manager::block_manager()
   pthread_mutex_init(&bitmap_mutex, NULL);
 }
 
+inline char parity(char x)
+{
+    char res = x;
+    res ^= res >> 4;
+    res ^= res >> 2;
+    res ^= res >> 1;
+    res &= 1;
+    return res;
+}
+
+inline char encode84(char x) 
+{
+    char res = x & 0x07;
+    res |= (x & 0x08) << 1; 
+    res |= parity(res & 0x15) << 6;
+    res |= parity(res & 0x13) << 5;
+    res |= parity(res & 0x07) << 3;
+    res |= parity(res) << 7;
+    return res;
+}
+
+inline bool decode84(char x, char & res) 
+{
+    char tmp = x;
+    int fix = 0;
+    if (parity(tmp & 0x55)) fix += 1;
+    if (parity(tmp & 0x33)) fix += 2;
+    if (parity(tmp & 0x0F)) fix += 4;
+    if (fix) {
+        tmp ^= 1 << (7 - fix);
+    }
+
+    if (parity(tmp)) {
+        return false;
+    }
+
+    res = tmp & 0x07;
+    res |= (tmp & 0x10) >> 1; 
+    return true;
+}
+
 void
 block_manager::read_block(uint32_t id, char *buf)
 {
-  d->read_block(id * WRITE_AMPLIFICATION, buf);
+    char code[BLOCK_SIZE * WRITE_AMPLIFICATION];
+    d->read_block(id * WRITE_AMPLIFICATION, code);
+    d->read_block(id * WRITE_AMPLIFICATION + 1, code + BLOCK_SIZE);
+    d->read_block(id * WRITE_AMPLIFICATION + 2, code + BLOCK_SIZE * 2);
+    d->read_block(id * WRITE_AMPLIFICATION + 3, code + BLOCK_SIZE * 3);
+    for (int i = 0; i < BLOCK_SIZE; ++i) {
+        char low, high;
+        if (!decode84(code[i * 2], low)) {
+            if (!decode84(code[BLOCK_SIZE * 2 + i * 2], low)) {
+                printf("\tim: error! error can not be corrected\n");
+                exit(1);
+            }
+        }
+        if (!decode84(code[i * 2 + 1], high)) {
+            if (!decode84(code[BLOCK_SIZE * 2 + i * 2 + 1], high)) {
+                printf("\tim: error! error can not be corrected\n");
+                exit(1);
+            }
+        }
+        buf[i] = (high << 4) | low;
+    }
 }
 
 void
 block_manager::write_block(uint32_t id, const char *buf)
 {
-  d->write_block(id * WRITE_AMPLIFICATION, buf);
+    char code[BLOCK_SIZE * WRITE_AMPLIFICATION];
+    for (int i = 0; i < BLOCK_SIZE; ++i) {
+        code[i * 2] = encode84(buf[i] & 0x0F);
+        code[i * 2 + 1] = encode84((buf[i] >> 4) & 0x0F);
+        code[BLOCK_SIZE * 2 + i * 2] = encode84(buf[i] & 0x0F);
+        code[BLOCK_SIZE * 2 + i * 2 + 1] = encode84((buf[i] >> 4) & 0x0F);
+    }
+    d->write_block(id * WRITE_AMPLIFICATION, code);
+    d->write_block(id * WRITE_AMPLIFICATION + 1, code + BLOCK_SIZE);
+    d->write_block(id * WRITE_AMPLIFICATION + 2, code + BLOCK_SIZE * 2);
+    d->write_block(id * WRITE_AMPLIFICATION + 3, code + BLOCK_SIZE * 3);
 }
 
 // inode layer -----------------------------------------
