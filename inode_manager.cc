@@ -119,16 +119,18 @@ inline char encode84(char x)
 
 inline bool decode84(char x, char & res) 
 {
+    bool syndrome = false;
     char tmp = x;
     int fix = 0;
     if (parity(tmp & 0x55)) fix += 1;
     if (parity(tmp & 0x33)) fix += 2;
     if (parity(tmp & 0x0F)) fix += 4;
     if (fix) {
+        syndrome = true;
         tmp ^= 1 << (7 - fix);
     }
 
-    if (parity(tmp)) {
+    if (syndrome && !parity(tmp)) {
         return false;
     }
 
@@ -161,6 +163,7 @@ block_manager::read_block(uint32_t id, char *buf)
         }
         buf[i] = (high << 4) | low;
     }
+    write_block(id, buf);
 }
 
 void
