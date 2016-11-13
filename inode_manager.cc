@@ -3,6 +3,8 @@
 #include <ctime>
 #include <pthread.h>
 
+#define WRITE_AMPLIFICATION 4
+
 // block layer -----------------------------------------
 
 // Allocate a free disk block.
@@ -66,8 +68,8 @@ block_manager::block_manager()
   d = new disk();
 
   // format the disk
-  sb.size = BLOCK_SIZE * BLOCK_NUM;
-  sb.nblocks = BLOCK_NUM;
+  sb.size = BLOCK_SIZE * BLOCK_NUM / WRITE_AMPLIFICATION;
+  sb.nblocks = BLOCK_NUM / WRITE_AMPLIFICATION;
   sb.ninodes = INODE_NUM;
 
   /* mark bootblock, superblock, bitmap, inode table region as used */
@@ -97,13 +99,13 @@ block_manager::block_manager()
 void
 block_manager::read_block(uint32_t id, char *buf)
 {
-  d->read_block(id, buf);
+  d->read_block(id * WRITE_AMPLIFICATION, buf);
 }
 
 void
 block_manager::write_block(uint32_t id, const char *buf)
 {
-  d->write_block(id, buf);
+  d->write_block(id * WRITE_AMPLIFICATION, buf);
 }
 
 // inode layer -----------------------------------------
