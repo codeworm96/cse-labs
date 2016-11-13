@@ -102,8 +102,7 @@ inline char parity(char x)
     res ^= res >> 4;
     res ^= res >> 2;
     res ^= res >> 1;
-    res &= 1;
-    return res;
+    return res & 1;
 }
 
 inline char encode84(char x) 
@@ -130,7 +129,7 @@ inline bool decode84(char x, char & res)
         tmp ^= 1 << (7 - fix);
     }
 
-    if (syndrome && !parity(tmp)) {
+    if (syndrome && !parity(x)) {
         return false;
     }
 
