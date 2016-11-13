@@ -2,7 +2,6 @@
 #include <cstring>
 #include <ctime>
 #include <pthread.h>
-#include <cstdint>
 
 #define WRITE_AMPLIFICATION 4
 
