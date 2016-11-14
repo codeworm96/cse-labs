@@ -99,9 +99,9 @@ block_manager::block_manager()
 inline char parity(char x)
 {
     char res = x;
-    res ^= res >> 4;
-    res ^= res >> 2;
-    res ^= res >> 1;
+    res = res ^ (res >> 4);
+    res = res ^ (res >> 2);
+    res = res ^ (res >> 1);
     return res & 1;
 }
 
@@ -151,13 +151,13 @@ block_manager::read_block(uint32_t id, char *buf)
         if (!decode84(code[i * 2], low)) {
             if (!decode84(code[BLOCK_SIZE * 2 + i * 2], low)) {
                 printf("\tim: error! error can not be corrected\n");
-                exit(1);
+                // exit(1);
             }
         }
         if (!decode84(code[i * 2 + 1], high)) {
             if (!decode84(code[BLOCK_SIZE * 2 + i * 2 + 1], high)) {
                 printf("\tim: error! error can not be corrected\n");
-                exit(1);
+                // exit(1);
             }
         }
         buf[i] = (high << 4) | low;
@@ -170,10 +170,12 @@ block_manager::write_block(uint32_t id, const char *buf)
 {
     char code[BLOCK_SIZE * WRITE_AMPLIFICATION];
     for (int i = 0; i < BLOCK_SIZE; ++i) {
-        code[i * 2] = encode84(buf[i] & 0x0F);
-        code[i * 2 + 1] = encode84((buf[i] >> 4) & 0x0F);
-        code[BLOCK_SIZE * 2 + i * 2] = encode84(buf[i] & 0x0F);
-        code[BLOCK_SIZE * 2 + i * 2 + 1] = encode84((buf[i] >> 4) & 0x0F);
+        char low = encode84(buf[i] & 0x0F);
+        char high = encode84((buf[i] >> 4) & 0x0F);
+        code[i * 2] = low;
+        code[i * 2 + 1] = high;
+        code[BLOCK_SIZE * 2 + i * 2] = low;
+        code[BLOCK_SIZE * 2 + i * 2 + 1] = high;
     }
     d->write_block(id * WRITE_AMPLIFICATION, code);
     d->write_block(id * WRITE_AMPLIFICATION + 1, code + BLOCK_SIZE);
