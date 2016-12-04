@@ -312,6 +312,7 @@ inode_manager::get_inode(uint32_t inum)
           old = true;
       } else if (ino->inum == inum) {
           if (ino->type == 0) {
+              pthread_mutex_unlock(&inodes_mutex);
               return NULL;
           }
           break;
