@@ -578,3 +578,19 @@ yfs_client::symlink(inum parent, const char * name, const char * link, inum & in
     lc->release(parent);
     return r;
 }
+
+void yfs_client::commit()
+{
+    ec->commit();
+}
+
+void yfs_client::undo()
+{
+    ec->undo();
+}
+
+void yfs_client::redo()
+{
+    ec->redo();
+}
+

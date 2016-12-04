@@ -71,6 +71,9 @@ block_manager::block_manager()
   sb.size = BLOCK_SIZE * BLOCK_NUM / WRITE_AMPLIFICATION;
   sb.nblocks = BLOCK_NUM / WRITE_AMPLIFICATION;
   sb.ninodes = INODE_NUM;
+  sb.version = 0;
+  sb.next_inode = 1;
+  sb.inode_end = 1;
 
   /* mark bootblock, superblock, bitmap, inode table region as used */
   char buf[BLOCK_SIZE];
@@ -188,12 +191,12 @@ block_manager::write_block(uint32_t id, const char *buf)
 inode_manager::inode_manager()
 {
   bm = new block_manager();
+  pthread_mutex_init(&inodes_mutex, NULL);
   uint32_t root_dir = alloc_inode(extent_protocol::T_DIR);
   if (root_dir != 1) {
     printf("\tim: error! alloc first inode %d, should be 1\n", root_dir);
     exit(0);
   }
-  pthread_mutex_init(&inodes_mutex, NULL);
 }
 
 /* Create a new file.
@@ -201,89 +204,162 @@ inode_manager::inode_manager()
 uint32_t
 inode_manager::alloc_inode(uint32_t type)
 {
-  /* 
-   * your lab1 code goes here.
-   * note: the normal inode block should begin from the 2nd inode block.
-   * the 1st is used for root_dir, see inode_manager::inode_manager().
-   */
   // use lock to ensure allocation is thread-safe
-  pthread_mutex_lock(&inodes_mutex);
+  unsigned int inum;
+  unsigned int pos;
   char buf[BLOCK_SIZE];
-  uint32_t cur = 1;
-  while (cur <= bm->sb.ninodes) {
-    bm->read_block(IBLOCK(cur, bm->sb.nblocks), buf);
-    for (int i = 0; i < IPB && cur <= bm->sb.ninodes; ++i) {
-      inode_t * ino = (inode_t *)buf + i;
-      if (ino->type == 0) {
-        ino->type = type;
-        ino->size = 0;
-        ino->atime = std::time(0);
-        ino->mtime = std::time(0);
-        ino->ctime = std::time(0);
-        bm->write_block(IBLOCK(cur, bm->sb.nblocks), buf);
-        pthread_mutex_unlock(&inodes_mutex);
-        return cur;
-      }
-      ++cur;
-    }
-  }
-  printf("\tim: error! out of inodes\n");
+  pthread_mutex_lock(&inodes_mutex);
+  inum = bm->sb.next_inode++;
+  pos = bm->sb.inode_end++;
+  bzero(buf, sizeof(buf));
+  std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+  bm->write_block(1, buf);
   pthread_mutex_unlock(&inodes_mutex);
-  exit(0);
+
+  bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  inode_t * ino = (inode_t *)buf;
+  ino->commit = -1;
+  ino->type = type;
+  ino->inum = inum;
+  ino->pos = pos;
+  ino->size = 0;
+  ino->atime = std::time(0);
+  ino->mtime = std::time(0);
+  ino->ctime = std::time(0);
+  bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  
+  return inum;
 }
 
 void
-inode_manager::free_inode(uint32_t inum)
+inode_manager::commit()
 {
-  /* 
-   * your lab1 code goes here.
-   * note: you need to check if the inode is already a freed one;
-   * if not, clear it, and remember to write back to disk.
-   */
-  // use lock to ensure free is thread-safe
-  pthread_mutex_lock(&inodes_mutex);
+  unsigned int pos;
   char buf[BLOCK_SIZE];
-  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
-  inode_t * ino = (inode_t *)buf + (inum - 1) % IPB;
-  if (ino->type == 0) {
-    printf("\tim: error! inode is already freed\n");
-    pthread_mutex_unlock(&inodes_mutex);
-    exit(0);
-  } else {
-    ino->type = 0;
-    bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
-    pthread_mutex_unlock(&inodes_mutex);
+  pthread_mutex_lock(&inodes_mutex);
+  pos = bm->sb.inode_end++;
+
+  bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  inode_t * ino = (inode_t *)buf;
+  ino->commit = bm->sb.version++;
+  bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  
+  bzero(buf, sizeof(buf));
+  std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+  bm->write_block(1, buf);
+  pthread_mutex_unlock(&inodes_mutex);
+}
+
+void
+inode_manager::undo()
+{
+  char buf[BLOCK_SIZE];
+  pthread_mutex_lock(&inodes_mutex);
+  --bm->sb.version;
+  while (true) {
+      bm->read_block(IBLOCK(--bm->sb.inode_end, bm->sb.nblocks), buf);
+      inode_t * ino = (inode_t *)buf;
+      if (ino->commit == (short)bm->sb.version) {
+          bzero(buf, sizeof(buf));
+          std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+          bm->write_block(1, buf);
+          pthread_mutex_unlock(&inodes_mutex);
+          return;
+      }
   }
 }
+
+void
+inode_manager::redo()
+{
+  char buf[BLOCK_SIZE];
+  pthread_mutex_lock(&inodes_mutex);
+  while (true) {
+      bm->read_block(IBLOCK(bm->sb.inode_end++, bm->sb.nblocks), buf);
+      inode_t * ino = (inode_t *)buf;
+      if (ino->commit == (short)bm->sb.version) {
+          bm->sb.version++;
+          bzero(buf, sizeof(buf));
+          std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+          bm->write_block(1, buf);
+          pthread_mutex_unlock(&inodes_mutex);
+          return;
+      }
+  }
+}
+
+#define MIN(a,b) ((a)<(b) ? (a) : (b))
 
 /* Return an inode structure by inum, NULL otherwise.
  * Caller should release the memory. */
 struct inode* 
 inode_manager::get_inode(uint32_t inum)
 {
-  struct inode *ino, *ino_disk;
+  struct inode *ino, *ino_disk, *res;
+  unsigned int pos;
   char buf[BLOCK_SIZE];
-
-  printf("\tim: get_inode %d\n", inum);
-
-  if (inum <= 0 || inum > INODE_NUM) {
-    printf("\tim: inum out of range\n");
-    return NULL;
+  char buf2[BLOCK_SIZE];
+  char buf3[BLOCK_SIZE];
+  char new_indirect[BLOCK_SIZE];
+  char old_indirect[BLOCK_SIZE];
+  bool old = false;
+  pthread_mutex_lock(&inodes_mutex);
+  pos = bm->sb.inode_end - 1;
+  while (pos > 0) {
+      bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf);
+      ino = (inode_t *)buf;
+      if (ino->commit != -1) {
+          old = true;
+      } else if (ino->inum == inum) {
+          if (ino->type == 0) {
+              return NULL;
+          }
+          break;
+      }
+      --pos;
   }
 
-  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
-  // printf("%s:%d\n", __FILE__, __LINE__);
+  if (old) {
+      pos = bm->sb.inode_end++;
+      bzero(buf, sizeof(buf2));
+      std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+      bm->write_block(1, buf2);
 
-  ino_disk = (struct inode*)buf + inum%IPB;
-  if (ino_disk->type == 0) {
-    printf("\tim: inode not exist\n");
-    return NULL;
+      bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf2);
+      ino_disk = (inode_t *)buf2;
+      ino_disk->commit = ino->commit;
+      ino_disk->type = ino->type;
+      ino_disk->inum = ino->inum;
+      ino_disk->pos = pos;
+      ino_disk->size = ino->size;
+      ino_disk->atime = ino->atime;
+      ino_disk->mtime = ino->mtime;
+      ino_disk->ctime = ino->ctime;
+      unsigned int block_num = (ino->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+      if (block_num > NDIRECT) {
+        bm->read_block(ino->blocks[NDIRECT], old_indirect);
+        for (unsigned int i = NDIRECT; i < block_num; ++i) {
+            bm->read_block(old_indirect[i - NDIRECT], buf3);
+            new_indirect[i - NDIRECT] = bm->alloc_block();
+            bm->write_block(new_indirect[i - NDIRECT], buf3);
+        }
+        ino_disk->blocks[NDIRECT] = bm->alloc_block();
+        bm->write_block(ino_disk->blocks[NDIRECT], new_indirect);
+      }
+      for (unsigned int i = 0; i < MIN(block_num, NDIRECT); ++i) {
+          bm->read_block(ino->blocks[i], buf3);
+          ino_disk->blocks[i] = bm->alloc_block();
+          bm->write_block(ino_disk->blocks[i], buf3);
+      }
+
+      bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
+      ino = ino_disk;
   }
 
-  ino = (struct inode*)malloc(sizeof(struct inode));
-  *ino = *ino_disk;
-
-  return ino;
+  res = (struct inode*)malloc(sizeof(*res));
+  *res = *ino;
+  pthread_mutex_unlock(&inodes_mutex);
+  return res;
 }
 
 void
@@ -296,13 +372,12 @@ inode_manager::put_inode(uint32_t inum, struct inode *ino)
   if (ino == NULL)
     return;
 
-  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
-  ino_disk = (struct inode*)buf + inum%IPB;
+  bm->read_block(IBLOCK(ino->pos, bm->sb.nblocks), buf);
+  ino_disk = (struct inode*)buf;
   *ino_disk = *ino;
-  bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
+  bm->write_block(IBLOCK(ino->pos, bm->sb.nblocks), buf);
 }
 
-#define MIN(a,b) ((a)<(b) ? (a) : (b))
 
 /* Get all the data of a file by inum. 
  * Return alloced data, should be freed by caller. */
@@ -487,27 +562,20 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
 void
 inode_manager::remove_file(uint32_t inum)
 {
-  /*
-   * your lab1 code goes here
-   * note: you need to consider about both the data block and inode of the file
-   */
-  inode_t * ino = get_inode(inum);
-  unsigned int block_num = (ino->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  if (block_num <= NDIRECT) {
-    for (unsigned int i = 0; i < block_num; ++i) {
-      bm->free_block(ino->blocks[i]);
-    }
-  } else {
-    for (int i = 0; i < NDIRECT; ++i) {
-      bm->free_block(ino->blocks[i]);
-    }
-    char indirect[BLOCK_SIZE];
-    bm->read_block(ino->blocks[NDIRECT], indirect);
-    for (unsigned int i = 0; i < block_num - NDIRECT; ++i) {
-      bm->free_block(*((blockid_t *)indirect + i));
-    }
-    bm->free_block(ino->blocks[NDIRECT]);
-  }
-  free_inode(inum);
-  free(ino);
+  unsigned int pos;
+  char buf[BLOCK_SIZE];
+  pthread_mutex_lock(&inodes_mutex);
+  pos = bm->sb.inode_end++;
+
+  bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  inode_t * ino = (inode_t *)buf;
+  ino->commit = -1;
+  ino->type = 0;
+  ino->inum = inum;
+  bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
+  
+  bzero(buf, sizeof(buf));
+  std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+  bm->write_block(1, buf);
+  pthread_mutex_unlock(&inodes_mutex);
 }

@@ -31,6 +31,9 @@ typedef struct superblock {
   uint32_t size;
   uint32_t nblocks;
   uint32_t ninodes;
+  uint32_t version;
+  uint32_t next_inode;
+  uint32_t inode_end;
 } superblock_t;
 
 class block_manager {
@@ -75,7 +78,10 @@ class block_manager {
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 typedef struct inode {
+  short commit; // -1 for normal record
   short type; // 0 for free
+  unsigned int inum;
+  unsigned int pos;
   unsigned int size;
   unsigned int atime;
   unsigned int mtime;
@@ -93,11 +99,13 @@ class inode_manager {
  public:
   inode_manager();
   uint32_t alloc_inode(uint32_t type);
-  void free_inode(uint32_t inum);
   void read_file(uint32_t inum, char **buf, int *size);
   void write_file(uint32_t inum, const char *buf, int size);
   void remove_file(uint32_t inum);
   void getattr(uint32_t inum, extent_protocol::attr &a);
+  void commit();
+  void undo();
+  void redo();
 };
 
 #endif
