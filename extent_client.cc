@@ -70,7 +70,7 @@ extent_client::commit()
 {
   int r;
   extent_protocol::status ret = extent_protocol::OK;
-  ret = cl->call(extent_protocol::commit, r);
+  ret = cl->call(extent_protocol::commit, 0, r);
   return ret;
 }
 
@@ -79,7 +79,7 @@ extent_client::undo()
 {
   int r;
   extent_protocol::status ret = extent_protocol::OK;
-  ret = cl->call(extent_protocol::undo, r);
+  ret = cl->call(extent_protocol::undo, 0, r);
   return ret;
 }
 
@@ -88,7 +88,7 @@ extent_client::redo()
 {
   int r;
   extent_protocol::status ret = extent_protocol::OK;
-  ret = cl->call(extent_protocol::redo, r);
+  ret = cl->call(extent_protocol::redo, 0, r);
   return ret;
 }
 

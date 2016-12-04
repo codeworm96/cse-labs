@@ -28,9 +28,9 @@ class extent_server {
   int getattr(extent_protocol::extentid_t id, extent_protocol::attr &);
   int remove(extent_protocol::extentid_t id, int &);
 
-  int commit(int &);
-  int undo(int &);
-  int redo(int &);
+  int commit(int, int &);
+  int undo(int, int &);
+  int redo(int, int &);
 };
 
 #endif 
