@@ -274,17 +274,18 @@ inode_manager::redo()
 {
   char buf[BLOCK_SIZE];
   pthread_mutex_lock(&inodes_mutex);
+  ++bm->sb.version;
   while (true) {
-      bm->read_block(IBLOCK(bm->sb.inode_end++, bm->sb.nblocks), buf);
+      bm->read_block(IBLOCK(bm->sb.inode_end, bm->sb.nblocks), buf);
       inode_t * ino = (inode_t *)buf;
       if (ino->commit == (short)bm->sb.version) {
-          bm->sb.version++;
           bzero(buf, sizeof(buf));
           std::memcpy(buf, &bm->sb, sizeof(bm->sb));
           bm->write_block(1, buf);
           pthread_mutex_unlock(&inodes_mutex);
           return;
       }
+      ++bm->sb.inode_end;
   }
 }
 
@@ -322,8 +323,8 @@ inode_manager::get_inode(uint32_t inum)
 
   if (old) {
       pos = bm->sb.inode_end++;
-      bzero(buf, sizeof(buf2));
-      std::memcpy(buf, &bm->sb, sizeof(bm->sb));
+      bzero(buf2, sizeof(buf2));
+      std::memcpy(buf2, &bm->sb, sizeof(bm->sb));
       bm->write_block(1, buf2);
 
       bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf2);
@@ -353,7 +354,7 @@ inode_manager::get_inode(uint32_t inum)
           bm->write_block(ino_disk->blocks[i], buf3);
       }
 
-      bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
+      bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf2);
       ino = ino_disk;
   }
 
