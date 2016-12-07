@@ -678,24 +678,24 @@ main(int argc, char *argv[])
 	printf("Test File Permission:\n");
 
 	createm(d1, "a", "", 0666);
-	createm(d1, "r", "", 0666);
-	createm(d1, "w", "", 0666);
-	createm(d1, "n", "", 0666);
-	createm(d1, "gr", "", 0666);
-	createm(d1, "gw", "", 0666);
-	createm(d1, "gn", "", 0666);
-	createm(d1, "or", "", 0666);
-	createm(d1, "ow", "", 0666);
-	createm(d1, "on", "", 0666);
-	mkdirm(d1, "da", 0777);
-	mkdirm(d1, "dr", 0777);
-	mkdirm(d1, "dw", 0777);
-	mkdirm(d1, "dga", 0777);
-	mkdirm(d1, "dgr", 0777);
-	mkdirm(d1, "dgw", 0777);
-	mkdirm(d1, "doa", 0777);
-	mkdirm(d1, "dor", 0777);
-	mkdirm(d1, "dow", 0777);
+	createm(d1, "r", "", 0444);
+	createm(d1, "w", "", 0222);
+	createm(d1, "n", "", 0000);
+	createm(d1, "gr", "", 0040);
+	createm(d1, "gw", "", 0020);
+	createm(d1, "gn", "", 0000);
+	createm(d1, "or", "", 0004);
+	createm(d1, "ow", "", 0002);
+	createm(d1, "on", "", 0000);
+	mkdirm(d1, "da", 0666|0111);
+	mkdirm(d1, "dr", 0444|0111);
+	mkdirm(d1, "dw", 0222|0111);
+	mkdirm(d1, "dga", 0060|0111);
+	mkdirm(d1, "dgr", 0040|0111);
+	mkdirm(d1, "dgw", 0020|0111);
+	mkdirm(d1, "doa", 0006|0111);
+	mkdirm(d1, "dor", 0004|0111);
+	mkdirm(d1, "dow", 0002|0111);
 	
 	if ( (ret = writem(d1, "a", 64, '1')) != 0) {
 		goto write_error;
