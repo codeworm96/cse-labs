@@ -889,7 +889,7 @@ chmodo_ok:
 	if ((ret=writem(d3, "co", 64, '1')) != EACCES) {
 		goto chown_error;
 	}
-	if ((ret=readm(d1, "co")) != EPERM) {
+	if ((ret=readm(d1, "co")) != EACCES) {
 		goto chown_error;
 	}
 	printf("  root chown PASSED\n");
