@@ -687,22 +687,28 @@ main(int argc, char *argv[])
 	createm(d1, "or", "", 0004);
 	createm(d1, "ow", "", 0002);
 	createm(d1, "on", "", 0000);
-	mkdirm(d1, "da", 0666|0111);
-	mkdirm(d1, "dr", 0444|0111);
-	mkdirm(d1, "dw", 0222|0111);
-	mkdirm(d1, "dga", 0060|0111);
-	mkdirm(d1, "dgr", 0040|0111);
-	mkdirm(d1, "dgw", 0020|0111);
-	mkdirm(d1, "doa", 0006|0111);
-	mkdirm(d1, "dor", 0004|0111);
-	mkdirm(d1, "dow", 0002|0111);
+	mkdirm(d1, "da", 0777);
+	mkdirm(d1, "dr", 0777);
+	mkdirm(d1, "dw", 0777);
+	mkdirm(d1, "dga", 0777);
+	mkdirm(d1, "dgr", 0777);
+	mkdirm(d1, "dgw", 0777);
+	mkdirm(d1, "doa", 0777);
+	mkdirm(d1, "dor", 0777);
+	mkdirm(d1, "dow", 0777);
 	
 	if ( (ret = writem(d1, "a", 64, '1')) != 0) {
 		goto write_error;
 	}
 
+	if ( (ret = writem(d1, "r", 64, '1')) != EACCES) {
+		goto write_error;
+	}
 
 	if ( (ret = writem(d1, "w", 64, '1')) != 0) {
+		goto write_error;
+	}
+	if ( (ret = writem(d1, "n", 64, '1')) != EACCES) {
 		goto write_error;
 	}
 	printf("  owner write PASSED\n");
@@ -715,10 +721,16 @@ write_ok:
 	if ( (ret = readm(d1, "a")) != 0) {
 		goto read_error;
 	}
+	if ( (ret = readm(d1, "w")) != EACCES) {
+		goto read_error;
+	}
 	if ( (ret = readm(d1, "r")) != 0) {
 		goto read_error;
 	}
 
+	if ( (ret = readm(d1, "n")) != EACCES) {
+		goto read_error;
+	}
 	printf("  owner read PASSED\n");
 	filenum ++;
 	goto read_ok;
@@ -731,8 +743,14 @@ read_ok:
 		goto writeg_error;
 	}
 
+	if ( (ret = writem(d2, "gr", 64, '1')) != EACCES) {
+		goto writeg_error;
+	}
 
 	if ( (ret = writem(d2, "gw", 64, '1')) != 0) {
+		goto writeg_error;
+	}
+	if ( (ret = writem(d2, "gn", 64, '1')) != EACCES) {
 		goto writeg_error;
 	}
 	printf("  group write PASSED\n");
@@ -745,10 +763,16 @@ writeg_ok:
 	if ( (ret = readm(d2, "a")) != 0) {
 		goto readg_error;
 	}
+	if ( (ret = readm(d2, "gw")) != EACCES) {
+		goto readg_error;
+	}
 	if ( (ret = readm(d2, "gr")) != 0) {
 		goto readg_error;
 	}
 
+	if ( (ret = readm(d2, "gn")) != EACCES) {
+		goto readg_error;
+	}
 	printf("  group read PASSED\n");
 	filenum ++;
 	goto readg_ok;
@@ -760,8 +784,14 @@ readg_ok:
 		goto writeo_error;
 	}
 
+	if ( (ret = writem(d3, "or", 64, '1')) != EACCES) {
+		goto writeo_error;
+	}
 
 	if ( (ret = writem(d3, "ow", 64, '1')) != 0) {
+		goto writeo_error;
+	}
+	if ( (ret = writem(d3, "on", 64, '1')) != EACCES) {
 		goto writeo_error;
 	}
 	printf("  other write PASSED\n");
@@ -775,10 +805,16 @@ writeo_ok:
 	if ( (ret = readm(d3, "a")) != 0) {
 		goto reado_error;
 	}
+	if ( (ret = readm(d3, "ow")) != EACCES) {
+		goto reado_error;
+	}
 	if ( (ret = readm(d3, "or")) != 0) {
 		goto reado_error;
 	}
 
+	if ( (ret = readm(d3, "on")) != EACCES) {
+		goto reado_error;
+	}
 	printf("  other read PASSED\n");
 	filenum ++;
 	goto reado_ok;
@@ -853,7 +889,7 @@ chmodo_ok:
 	if ((ret=writem(d3, "co", 64, '1')) != EACCES) {
 		goto chown_error;
 	}
-	if ((ret=readm(d1, "co")) != EACCES) {
+	if ((ret=readm(d1, "co")) != EPERM) {
 		goto chown_error;
 	}
 	printf("  root chown PASSED\n");
@@ -884,6 +920,68 @@ chownn_ok:
 	printf("Score: %d/100\n\n", filenum*10);
 
 	printf("Test Dirtectory Permission\n");
+
+	
+	if (writedirm(d1, "da", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dr", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dw", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dga", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dgr", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dgw", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "doa", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dor", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+	if (writedirm(d1, "dow", "file0", "dir0") != 0) {
+		goto init_error;
+	}
+
+	if (chmod1(d1, "da",0666|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dr",0444|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dw",0222|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dga",0060|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dgr",0040|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dgw",0020|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "doa",0006|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dor",0004|0111) != 0) {
+		goto init_error;
+	}
+	if (chmod1(d1, "dow",0002|0111) != 0) {
+		goto init_error;
+	}
+	goto init_ok;
+init_error:
+	printf("  init directory error\n");
+init_ok:
+
 
 	if (writedirm(d1, "da", "file1", "dir1") != 0) {
 		goto writed_error;
@@ -921,6 +1019,9 @@ readd_ok:
 	if (writedirm(d2, "dga", "file4", "dir4") != 0) {
 		goto writedg_error;
 	}
+	if (writedirm(d2, "dgr", "file5", "dir5") != EACCES) {
+		goto writedg_error;
+	}
 	if (writedirm(d2, "dgw", "file6", "dir6") != 0) {
 		goto writedg_error;
 	}
@@ -937,6 +1038,9 @@ writedg_ok:
 	if (readdirm(d2, "dgr") != 0) {
 		goto readdg_error;
 	}
+	if (readdirm(d2, "dgw") != EACCES) {
+		goto readdg_error;
+	}
 	printf(" group read PASSED\n");
 	dirnum ++;
 	goto readdg_ok;
@@ -946,6 +1050,9 @@ readdg_ok:
 
 
 	if (writedirm(d1, "doa", "file7", "dir7") != 0) {
+		goto writedo_error;
+	}
+	if (writedirm(d1, "dor", "file8", "dir8") != EACCES) {
 		goto writedo_error;
 	}
 	if (writedirm(d1, "dow", "file9", "dir9") != 0) {
