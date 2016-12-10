@@ -1049,13 +1049,13 @@ readdg_error:
 readdg_ok:
 
 
-	if (writedirm(d1, "doa", "file7", "dir7") != 0) {
+	if (writedirm(d3, "doa", "file7", "dir7") != 0) {
 		goto writedo_error;
 	}
-	if (writedirm(d1, "dor", "file8", "dir8") != EACCES) {
+	if (writedirm(d3, "dor", "file8", "dir8") != EACCES) {
 		goto writedo_error;
 	}
-	if (writedirm(d1, "dow", "file9", "dir9") != 0) {
+	if (writedirm(d3, "dow", "file9", "dir9") != 0) {
 		goto writedo_error;
 	}
 	printf("  other write PASSED\n");
@@ -1065,13 +1065,13 @@ writedo_error:
 	printf("  other write ERROR\n");
 writedo_ok:
   
-	if (readdirm(d1, "doa") != 0) {
+	if (readdirm(d3, "doa") != 0) {
 		goto readdo_error;
 	}
-	if (readdirm(d1, "dor") != 0) {
+	if (readdirm(d3, "dor") != 0) {
 		goto readdo_error;
 	}
-	if (readdirm(d1, "dow") != EACCES) {
+	if (readdirm(d3, "dow") != EACCES) {
 		goto readdo_error;
 	}
 	printf(" other read PASSED\n");
