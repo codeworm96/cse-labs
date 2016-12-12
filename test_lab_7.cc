@@ -599,6 +599,9 @@ main(int argc, char *argv[])
 	unsigned short uid;
 	int ret;
 	int certnum, filenum, dirnum;
+
+	umask(0);
+
 	certnum = 0;
 	filenum = 0;
 	dirnum = 0;
