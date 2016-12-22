@@ -171,7 +171,7 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			} else {
         		fuse_reply_err(req, ENOENT);
 			}
-			return ;
+			return;
 		}
         getattr(ino, st);
         fuse_reply_attr(req, &st, 0);

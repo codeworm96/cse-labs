@@ -15,6 +15,10 @@
 #include <openssl/pem.h>
 
 #define MAX_NAME_LEN 30
+#define 	FUSE_SET_ATTR_GID   (1 << 2)
+#define 	FUSE_SET_ATTR_MODE   (1 << 0)
+#define 	FUSE_SET_ATTR_SIZE   (1 << 3)
+#define 	FUSE_SET_ATTR_UID   (1 << 1)
 
 yfs_client::yfs_client()
 {
@@ -29,6 +33,7 @@ yfs_client::yfs_client(std::string extent_dst, std::string lock_dst, const char*
   if (verify(cert_file, &uid) != OK) {
       printf("verify error\n");
   }
+  printf("group: %d\n", group.size());
   lc->acquire(1);
   if (ec->put(1, "") != extent_protocol::OK)
       printf("error init root dir\n"); // XYB: init root dir
@@ -118,12 +123,13 @@ yfs_client::verify(const char* name, unsigned short *uid)
                 break;
             }
 	}
-        if (ret = OK) {
+        if (ret == OK) {
             group.insert(*uid);
-            std::ifstream g(USERFILE);
+            std::ifstream g(GROUPFILE);
             std::string line;
             while(std::getline(g, line)) {
                 size_t pos = line.find_last_of(":");
+                printf("%s\n", line.substr(pos + 1).c_str());
                 if (cn == line.substr(pos + 1)) {
                     size_t next = line.find_last_of(":", pos - 1);
                     ++next;
@@ -305,12 +311,13 @@ yfs_client::can_read(inum inum)
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         return false;
     }
+    printf("log: %d %d %d\n", a.mode, a.uid, a.gid);
     if (a.uid == uid) {
-        return a.mode & 0004;
+        return a.mode & 0400;
     } else if (group.count(a.gid)) {
         return a.mode & 0040;
     } else {
-        return a.mode & 0400;
+        return a.mode & 0004;
     }
 }
 
@@ -321,12 +328,13 @@ yfs_client::can_write(inum inum)
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         return false;
     }
+    printf("log: %d %d %d\n", a.mode, a.uid, a.gid);
     if (a.uid == uid) {
-        return a.mode & 0002;
+        return a.mode & 0200;
     } else if (group.count(a.gid)) {
         return a.mode & 0020;
     } else {
-        return a.mode & 0200;
+        return a.mode & 0002;
     }
 }
 
@@ -338,12 +346,6 @@ yfs_client::getfile(inum inum, fileinfo &fin)
     printf("getfile %016llx\n", inum);
     extent_protocol::attr a;
     lc->acquire(inum);
-    if (!can_read(inum)) {
-      printf("getfile: permission denied\n");
-      lc->release(inum);
-      return NOPEM;
-    }
-
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -371,12 +373,6 @@ yfs_client::getdir(inum inum, dirinfo &din)
     printf("getdir %016llx\n", inum);
     extent_protocol::attr a;
     lc->acquire(inum);
-    if (!can_read(inum)) {
-      printf("getdir: permission denied\n");
-      lc->release(inum);
-      return NOPEM;
-    }
-
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -408,34 +404,55 @@ yfs_client::setattr(inum ino, filestat st, unsigned long toset)
 {
     int r = OK;
 
-    /*
-     * your lab2 code goes here.
-     * note: get the content of inode ino, and modify its content
-     * according to the size (<, =, or >) content length.
-     */
-
     lc->acquire(ino);
     std::string buf;
-    r = ec->get(ino, buf);
-    if (r != OK) {
-      printf("setattr: file not exist\n");
+    if (!can_write(ino) && (toset & FUSE_SET_ATTR_SIZE)) {
+      printf("setattr: permission denied\n");
       lc->release(ino);
-      return r;
+      return NOPEM;
     }
 
-    buf.resize(st.size);
-
-    r = ec->put(ino, buf);
+    extent_protocol::attr a;
+    r = ec->getattr(ino, a);
     if (r != OK) {
       printf("setattr: update failed\n");
       lc->release(ino);
       return r;
     }
 
-    extent_protocol::attr a;
-    a.mode = st.mode;
-    a.uid = st.uid;
-    a.gid = st.gid;
+    if ((toset & FUSE_SET_ATTR_MODE) && a.uid != uid && uid) {
+      printf("setattr: permission denied\n");
+      lc->release(ino);
+      return NOPEM;
+    }
+    if ((toset & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) && uid) {
+      printf("setattr: permission denied\n");
+      lc->release(ino);
+      return NOPEM;
+    }
+
+    if (toset & FUSE_SET_ATTR_SIZE) {
+	r = ec->get(ino, buf);
+	if (r != OK) {
+	printf("setattr: file not exist\n");
+	lc->release(ino);
+	return r;
+	}
+
+	buf.resize(st.size);
+
+	r = ec->put(ino, buf);
+	if (r != OK) {
+        printf("setattr: update failed\n");
+	lc->release(ino);
+	return r;
+	}
+    }
+
+    if (toset & FUSE_SET_ATTR_MODE) a.mode = st.mode;
+    if (toset & FUSE_SET_ATTR_UID) a.uid = st.uid;
+    if (toset & FUSE_SET_ATTR_GID) a.gid = st.gid;
+    printf("ch: %d %d %d\n", a.mode, a.uid, a.gid);
     r = ec->setattr(ino, a);
     if (r != OK) {
       printf("setattr: update failed\n");
@@ -483,6 +500,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
 
     extent_protocol::attr a;
     a.mode = mode;
+printf("new mode: %d\n", mode);
     a.type = extent_protocol::T_FILE;
     a.uid = uid;
     a.gid = uid;
@@ -538,6 +556,7 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
       return EXIST;
     }
 
+    printf("mode: %d\n", mode);
     extent_protocol::attr a;
     a.mode = mode;
     a.type = extent_protocol::T_DIR;
@@ -574,12 +593,6 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
 
     lc->acquire(parent);
     std::string buf;
-    if (!can_read(parent)) {
-      printf("lookup: permission denied\n");
-      lc->release(parent);
-      return NOPEM;
-    }
-
     r = ec->get(parent, buf);
     lc->release(parent);
     if (r != OK) {

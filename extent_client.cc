@@ -29,15 +29,17 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 
 extent_protocol::status
 extent_client::setattr(extent_protocol::extentid_t eid, 
-		       extent_protocol::attr &attr)
+		       extent_protocol::attr attr)
 {
+  int r;
   extent_protocol::status ret = extent_protocol::OK;
-  ret = cl->call(extent_protocol::getattr, eid, attr);
+  printf("send: %d %d %d\n", attr.mode, attr.uid, attr.gid);
+  ret = cl->call(extent_protocol::setattr, eid, attr, r);
   return ret;
 }
 
 extent_protocol::status
-extent_client::create(extent_protocol::attr &a, extent_protocol::extentid_t &id)
+extent_client::create(extent_protocol::attr a, extent_protocol::extentid_t &id)
 {
   extent_protocol::status ret = extent_protocol::OK;
   // Your lab3 code goes here
