@@ -14,11 +14,11 @@ extent_server::extent_server()
   im = new inode_manager();
 }
 
-int extent_server::create(uint32_t type, extent_protocol::extentid_t &id)
+int extent_server::create(const extent_protocol::attr &a, extent_protocol::extentid_t &id)
 {
   // alloc a new inode and return inum
   printf("extent_server: create inode\n");
-  id = im->alloc_inode(type);
+  id = im->alloc_inode(a);
 
   return extent_protocol::OK;
 }
@@ -66,6 +66,17 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
   memset(&attr, 0, sizeof(attr));
   im->getattr(id, attr);
   a = attr;
+
+  return extent_protocol::OK;
+}
+
+int extent_server::setattr(extent_protocol::extentid_t id, const extent_protocol::attr &a)
+{
+  printf("extent_server: setattr %lld\n", id);
+
+  id &= 0x7fffffff;
+  
+  im->setattr(id, a);
 
   return extent_protocol::OK;
 }

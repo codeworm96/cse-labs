@@ -14,6 +14,7 @@ class extent_protocol {
     put = 0x6001,
     get,
     getattr,
+    setattr,
     remove,
     create,
     commit,
@@ -33,6 +34,9 @@ class extent_protocol {
     unsigned int mtime;
     unsigned int ctime;
     unsigned int size;
+    unsigned long mode;
+    unsigned short uid;
+    unsigned short gid;
   };
 };
 

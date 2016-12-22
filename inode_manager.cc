@@ -192,7 +192,12 @@ inode_manager::inode_manager()
 {
   bm = new block_manager();
   pthread_mutex_init(&inodes_mutex, NULL);
-  uint32_t root_dir = alloc_inode(extent_protocol::T_DIR);
+  extent_protocol::attr a;
+  a.type = extent_protocol::T_DIR;
+  a.mode = 0777;
+  a.gid = 0;
+  a.uid = 0;
+  uint32_t root_dir = alloc_inode(a);
   if (root_dir != 1) {
     printf("\tim: error! alloc first inode %d, should be 1\n", root_dir);
     exit(0);
@@ -202,7 +207,7 @@ inode_manager::inode_manager()
 /* Create a new file.
  * Return its inum. */
 uint32_t
-inode_manager::alloc_inode(uint32_t type)
+inode_manager::alloc_inode(const extent_protocol::attr &a)
 {
   // use lock to ensure allocation is thread-safe
   unsigned int inum;
@@ -219,13 +224,16 @@ inode_manager::alloc_inode(uint32_t type)
   bm->read_block(IBLOCK(pos, bm->sb.nblocks), buf);
   inode_t * ino = (inode_t *)buf;
   ino->commit = -1;
-  ino->type = type;
+  ino->type = a.type;
   ino->inum = inum;
   ino->pos = pos;
   ino->size = 0;
   ino->atime = std::time(0);
   ino->mtime = std::time(0);
   ino->ctime = std::time(0);
+  ino->mode = a.mode;
+  ino->uid = a.uid;
+  ino->gid = a.gid;
   bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
   
   return inum;
@@ -337,6 +345,9 @@ inode_manager::get_inode(uint32_t inum)
       ino_disk->atime = ino->atime;
       ino_disk->mtime = ino->mtime;
       ino_disk->ctime = ino->ctime;
+      ino_disk->mode = ino->mode;
+      ino_disk->uid = ino->uid;
+      ino_disk->gid = ino->gid;
       unsigned int block_num = (ino->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
       if (block_num > NDIRECT) {
         bm->read_block(ino->blocks[NDIRECT], old_indirect);
@@ -556,7 +567,25 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
     a.mtime = ino->mtime;
     a.ctime = ino->ctime;
     a.size = ino->size;
+    a.mode = ino->mode;
+    a.uid = ino->uid;
+    a.gid = ino->gid;
 
+    free(ino);
+  }
+}
+
+void
+inode_manager::setattr(uint32_t inum, const extent_protocol::attr &a)
+{
+  inode_t * ino = get_inode(inum);
+
+  if (ino) {
+    ino->mode = a.mode;
+    ino->uid = a.uid;
+    ino->gid = a.gid;
+
+    put_inode(inum, ino);
     free(ino);
   }
 }
