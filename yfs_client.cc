@@ -3,6 +3,9 @@
 #include "extent_client.h"
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <cstdlib>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -10,6 +13,8 @@
 #include <fcntl.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
+
+#define MAX_NAME_LEN 30
 
 yfs_client::yfs_client()
 {
@@ -32,7 +37,9 @@ yfs_client::verify(const char* name, unsigned short *uid)
 {
     int ret = ERRPEM;
     X509_STORE *ca_ctx = NULL;
-    X509_LOOKUP *lookup = NULL;
+    X509 * cert = NULL;
+    BIO * c = NULL;
+    X509_STORE_CTX *csc = NULL;
 
     OpenSSL_add_all_algorithms();
 
@@ -42,29 +49,11 @@ yfs_client::verify(const char* name, unsigned short *uid)
         return ERRPEM;
     }
 
-    lookup = X509_STORE_add_lookup(ca_ctx, X509_LOOKUP_file());
-    if (lookup == NULL) {
+    if(!X509_STORE_load_locations(ca_ctx, CA_FILE, NULL)) {
         X509_STORE_free(ca_ctx);
         EVP_cleanup();
         return ERRPEM;
     }
-    if (!X509_LOOKUP_load_file(lookup, CA_FILE, X509_FILETYPE_PEM)) {
-        X509_STORE_free(ca_ctx);
-        EVP_cleanup();
-        return ERRPEM;
-    }
-    lookup = X509_STORE_add_lookup(ca_ctx, X509_LOOKUP_hash_dir());
-    if (lookup == NULL) {
-        X509_STORE_free(ca_ctx);
-        EVP_cleanup();
-        return ERRPEM;
-    }
-
-    X509_LOOKUP_add_dir(lookup, NULL, X509_FILETYPE_DEFAULT);
-
-    X509 * cert = NULL;
-    BIO * c = NULL;
-    X509_STORE_CTX *csc = NULL;
 
     c = BIO_new(BIO_s_file());
     if (c == NULL) {
@@ -97,7 +86,7 @@ yfs_client::verify(const char* name, unsigned short *uid)
     }
 
     X509_STORE_set_flags(ca_ctx, 0);
-    if (!X509_STORE_CTX_init(csc, ca_ctx, cert, 0)) {
+    if (!X509_STORE_CTX_init(csc, ca_ctx, cert, NULL)) {
         X509_STORE_CTX_free(csc);
         X509_free(cert);
         BIO_free(c);
@@ -108,7 +97,24 @@ yfs_client::verify(const char* name, unsigned short *uid)
 
     if (X509_verify_cert(csc)) {
         //ok
-        ret = OK;
+        char buf[MAX_NAME_LEN];
+        X509_NAME *name = X509_get_subject_name(cert);
+        X509_NAME_get_text_by_NID(name, OBJ_txt2nid("CN"), buf, MAX_NAME_LEN); 
+ 
+        std::string cn(buf);
+        std::ifstream pw(USERFILE);
+        std::string line;
+        ret = ENUSE;
+        while(std::getline(pw, line)) {
+            size_t pos = line.find_first_of(":");
+            if (cn == line.substr(0, pos)) {
+                pos += 3;
+		size_t next = line.find_first_of(":", pos);
+                *uid = std::atoi(line.substr(pos, next - pos).c_str());
+                ret = OK;
+                break;
+            }
+	}
     } else {
         int err = X509_STORE_CTX_get_error(csc);
         if (err == X509_V_ERR_CERT_HAS_EXPIRED) {
@@ -127,7 +133,6 @@ yfs_client::verify(const char* name, unsigned short *uid)
     EVP_cleanup();
     return ret;
 }
-
 
 yfs_client::inum
 yfs_client::n2i(std::string n)
