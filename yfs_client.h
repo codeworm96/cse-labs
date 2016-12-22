@@ -14,8 +14,8 @@
 
 
 #define CA_FILE "./cert/ca.pem"
-#define USERFILE	"./etc/passwd"
-#define GROUPFILE	"./etc/group"
+#define USERFILE "./etc/passwd"
+#define GROUPFILE "./etc/group"
 
 
 class yfs_client {
@@ -97,10 +97,7 @@ class yfs_client {
   int read(inum, size_t, off_t, std::string &);
   int unlink(inum,const char *);
   int mkdir(inum , const char *, mode_t , inum &);
-<<<<<<< HEAD
-
   int verify(const char* cert_file, unsigned short*);
-=======
   
   /** you may need to add symbolic link related methods here.*/
   int readlink(inum, std::string &);
@@ -109,7 +106,6 @@ class yfs_client {
   void commit();
   void undo();
   void redo();
->>>>>>> lab6
 };
 
 #endif 

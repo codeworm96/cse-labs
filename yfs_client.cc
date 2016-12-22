@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
 
 yfs_client::yfs_client()
 {
@@ -28,9 +30,102 @@ yfs_client::yfs_client(std::string extent_dst, std::string lock_dst, const char*
 int
 yfs_client::verify(const char* name, unsigned short *uid)
 {
-  	int ret = OK;
+    int ret = ERRPEM;
+    X509_STORE *ca_ctx = NULL;
+    X509_LOOKUP *lookup = NULL;
 
-	return ret;
+    OpenSSL_add_all_algorithms();
+
+    ca_ctx = X509_STORE_new();
+    if (ca_ctx == NULL) {
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    lookup = X509_STORE_add_lookup(ca_ctx, X509_LOOKUP_file());
+    if (lookup == NULL) {
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+    if (!X509_LOOKUP_load_file(lookup, CA_FILE, X509_FILETYPE_PEM)) {
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+    lookup = X509_STORE_add_lookup(ca_ctx, X509_LOOKUP_hash_dir());
+    if (lookup == NULL) {
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    X509_LOOKUP_add_dir(lookup, NULL, X509_FILETYPE_DEFAULT);
+
+    X509 * cert = NULL;
+    BIO * c = NULL;
+    X509_STORE_CTX *csc = NULL;
+
+    c = BIO_new(BIO_s_file());
+    if (c == NULL) {
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+    if (BIO_read_filename(c, name) <= 0) {
+        BIO_free(c);
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    cert = PEM_read_bio_X509_AUX(c, NULL, NULL, NULL);
+    if (cert == NULL) {
+        BIO_free(c);
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    csc = X509_STORE_CTX_new();
+    if (csc == NULL) {
+        X509_free(cert);
+        BIO_free(c);
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    X509_STORE_set_flags(ca_ctx, 0);
+    if (!X509_STORE_CTX_init(csc, ca_ctx, cert, 0)) {
+        X509_STORE_CTX_free(csc);
+        X509_free(cert);
+        BIO_free(c);
+        X509_STORE_free(ca_ctx);
+        EVP_cleanup();
+        return ERRPEM;
+    }
+
+    if (X509_verify_cert(csc)) {
+        //ok
+        ret = OK;
+    } else {
+        int err = X509_STORE_CTX_get_error(csc);
+        if (err == X509_V_ERR_CERT_HAS_EXPIRED) {
+            ret = ECTIM;
+        } else if (err = X509_V_ERR_CERT_UNTRUSTED) {
+            ret = EINVA;
+        } else {
+            ret = ERRPEM;
+        }
+    }
+
+    X509_STORE_CTX_free(csc);
+    X509_free(cert);
+    BIO_free(c);
+    X509_STORE_free(ca_ctx);
+    EVP_cleanup();
+    return ret;
 }
 
 
@@ -257,7 +352,7 @@ yfs_client::setattr(inum ino, filestat st, unsigned long toset)
       return r;
     }
 
-    buf.resize(size);
+    buf.resize(st.size);
 
     r = ec->put(ino, buf);
     if (r != OK) {
