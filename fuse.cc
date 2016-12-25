@@ -78,12 +78,14 @@ getattr(yfs_client::inum inum, struct stat &st)
         ret = yfs->getfile(inum, info);
         if(ret != yfs_client::OK)
             return ret;
-        st.st_mode = S_IFLNK | 0777;
+        st.st_mode = S_IFLNK | (info.mode & 0777);
         st.st_nlink = 1;
         st.st_atime = info.atime;
         st.st_mtime = info.mtime;
         st.st_ctime = info.ctime;
         st.st_size = info.size;
+	st.st_uid = info.uid;
+	st.st_gid = info.gid;
         printf("   getattr -> link %llu\n", info.size);
     }
     return yfs_client::OK;
@@ -545,7 +547,7 @@ fuseserver_symlink(fuse_req_t req, const char * link,
     yfs_client::status ret;
     struct fuse_entry_param e;
 
-    ret = yfs->symlink(inum, name, link, id);
+    ret = yfs->symlink(inum, name, link, 0777, id);
     if (ret != yfs_client::OK) {
         if (ret == yfs_client::EXIST) {
             fuse_reply_err(req, EEXIST);

@@ -10,6 +10,7 @@
 #include "extent_client.h"
 #include <vector>
 #include <map>
+#include <set>
 #include <utility>
 
 
@@ -21,6 +22,8 @@
 class yfs_client {
   extent_client *ec;
   lock_client *lc;
+  unsigned short uid;
+  std::set<unsigned short> group;
  public:
 
   typedef unsigned long long inum;
@@ -75,12 +78,12 @@ class yfs_client {
      void list(std::list<dirent>&);
      void erase(std::string);
   };
+  bool can_read(inum);
+  bool can_write(inum);
 
  public:
   yfs_client();
   yfs_client(std::string, std::string, const char*);
-  yfs_client(std::string, std::string);
-  yfs_client(std::string);
 
   bool isfile(inum);
   bool isdir(inum);
@@ -101,7 +104,7 @@ class yfs_client {
   
   /** you may need to add symbolic link related methods here.*/
   int readlink(inum, std::string &);
-  int symlink(inum, const char *, const char *, inum &);
+  int symlink(inum, const char *, const char *, mode_t, inum &);
 
   void commit();
   void undo();

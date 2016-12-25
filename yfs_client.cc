@@ -26,6 +26,9 @@ yfs_client::yfs_client(std::string extent_dst, std::string lock_dst, const char*
 {
   ec = new extent_client(extent_dst);
   lc = new lock_client(lock_dst);
+  if (verify(cert_file, &uid) != OK) {
+      printf("verify error\n");
+  }
   lc->acquire(1);
   if (ec->put(1, "") != extent_protocol::OK)
       printf("error init root dir\n"); // XYB: init root dir
@@ -113,6 +116,19 @@ yfs_client::verify(const char* name, unsigned short *uid)
                 *uid = std::atoi(line.substr(pos, next - pos).c_str());
                 ret = OK;
                 break;
+            }
+	}
+        if (ret = OK) {
+            group.insert(*uid);
+            std::ifstream g(USERFILE);
+            std::string line;
+            while(std::getline(g, line)) {
+                size_t pos = line.find_last_of(":");
+                if (cn == line.substr(pos + 1)) {
+                    size_t next = line.find_last_of(":", pos - 1);
+                    ++next;
+                    group.insert(std::atoi(line.substr(next, pos - next).c_str()));
+                }
             }
 	}
     } else {
@@ -282,6 +298,38 @@ yfs_client::issymlink(inum inum)
     return false;
 }
 
+bool
+yfs_client::can_read(inum inum)
+{
+    extent_protocol::attr a;
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        return false;
+    }
+    if (a.uid == uid) {
+        return a.mode & 0004;
+    } else if (group.count(a.gid)) {
+        return a.mode & 0040;
+    } else {
+        return a.mode & 0400;
+    }
+}
+
+bool
+yfs_client::can_write(inum inum)
+{
+    extent_protocol::attr a;
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        return false;
+    }
+    if (a.uid == uid) {
+        return a.mode & 0002;
+    } else if (group.count(a.gid)) {
+        return a.mode & 0020;
+    } else {
+        return a.mode & 0200;
+    }
+}
+
 int
 yfs_client::getfile(inum inum, fileinfo &fin)
 {
@@ -290,6 +338,12 @@ yfs_client::getfile(inum inum, fileinfo &fin)
     printf("getfile %016llx\n", inum);
     extent_protocol::attr a;
     lc->acquire(inum);
+    if (!can_read(inum)) {
+      printf("getfile: permission denied\n");
+      lc->release(inum);
+      return NOPEM;
+    }
+
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -299,6 +353,9 @@ yfs_client::getfile(inum inum, fileinfo &fin)
     fin.mtime = a.mtime;
     fin.ctime = a.ctime;
     fin.size = a.size;
+    fin.mode = a.mode;
+    fin.uid = a.uid;
+    fin.gid = a.gid;
     printf("getfile %016llx -> sz %llu\n", inum, fin.size);
 
 release:
@@ -314,6 +371,12 @@ yfs_client::getdir(inum inum, dirinfo &din)
     printf("getdir %016llx\n", inum);
     extent_protocol::attr a;
     lc->acquire(inum);
+    if (!can_read(inum)) {
+      printf("getdir: permission denied\n");
+      lc->release(inum);
+      return NOPEM;
+    }
+
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -321,6 +384,9 @@ yfs_client::getdir(inum inum, dirinfo &din)
     din.atime = a.atime;
     din.mtime = a.mtime;
     din.ctime = a.ctime;
+    din.mode = a.mode;
+    din.uid = a.uid;
+    din.gid = a.gid;
 
 release:
     lc->release(inum);
@@ -366,6 +432,17 @@ yfs_client::setattr(inum ino, filestat st, unsigned long toset)
       return r;
     }
 
+    extent_protocol::attr a;
+    a.mode = st.mode;
+    a.uid = st.uid;
+    a.gid = st.gid;
+    r = ec->setattr(ino, a);
+    if (r != OK) {
+      printf("setattr: update failed\n");
+      lc->release(ino);
+      return r;
+    }
+
     lc->release(ino);
     return r;
 }
@@ -383,6 +460,12 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
 
     lc->acquire(parent);
     std::string buf;
+    if (!can_write(parent)) {
+      printf("create: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
+    }
+
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("create: parent directory not exist\n");
@@ -398,7 +481,12 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_FILE, ino_out);
+    extent_protocol::attr a;
+    a.mode = mode;
+    a.type = extent_protocol::T_FILE;
+    a.uid = uid;
+    a.gid = uid;
+    r = ec->create(a, ino_out);
     if (r != OK) {
       printf("create: creation failure\n");
       lc->release(parent);
@@ -429,6 +517,12 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
 
     lc->acquire(parent);
     std::string buf;
+    if (!can_write(parent)) {
+      printf("mkdir: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
+    }
+
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("mkdir: parent directory not exist\n");
@@ -444,7 +538,12 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_DIR, ino_out);
+    extent_protocol::attr a;
+    a.mode = mode;
+    a.type = extent_protocol::T_DIR;
+    a.uid = uid;
+    a.gid = uid;
+    r = ec->create(a, ino_out);
     if (r != OK) {
       printf("mkdir: creation failure\n");
       lc->release(parent);
@@ -475,6 +574,12 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
 
     lc->acquire(parent);
     std::string buf;
+    if (!can_read(parent)) {
+      printf("lookup: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
+    }
+
     r = ec->get(parent, buf);
     lc->release(parent);
     if (r != OK) {
@@ -499,6 +604,12 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      */
 
     lc->acquire(dir);
+    if (!can_read(dir)) {
+      printf("readdir: permission denied\n");
+      lc->release(dir);
+      return NOPEM;
+    }
+
     std::string buf;
     r = ec->get(dir, buf);
     lc->release(dir);
@@ -524,6 +635,12 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
 
     lc->acquire(ino);
     std::string buf;
+    if (!can_read(ino)) {
+      printf("read: permission denied\n");
+      lc->release(ino);
+      return NOPEM;
+    }
+
     r = ec->get(ino, buf);
     lc->release(ino);
     if (r != OK) {
@@ -554,6 +671,12 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
 
     lc->acquire(ino);
     std::string buf;
+    if (!can_write(ino)) {
+      printf("write: permission denied\n");
+      lc->release(ino);
+      return NOPEM;
+    }
+
     r = ec->get(ino, buf);
     if (r != OK) {
       printf("write: file not exist\n");
@@ -592,6 +715,12 @@ int yfs_client::unlink(inum parent,const char *name)
 
     lc->acquire(parent);
     std::string buf;
+    if (!can_write(parent)) {
+      printf("unlink: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
+    }
+
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("unlink: parent directory not exist\n");
@@ -605,6 +734,12 @@ int yfs_client::unlink(inum parent,const char *name)
       printf("unlink: file not found\n");
       lc->release(parent);
       return NOENT;
+    }
+
+    if (!can_write(id)) {
+      printf("unlink: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
     }
 
     table.erase(std::string(name));
@@ -633,10 +768,16 @@ yfs_client::readlink(inum ino, std::string &data)
 
     lc->acquire(ino);
     std::string buf;
+    if (!can_read(ino)) {
+      printf("readlink: permission denied\n");
+      lc->release(ino);
+      return NOPEM;
+    }
+
     r = ec->get(ino, buf);
     lc->release(ino);
     if (r != OK) {
-      printf("read: file not exist\n");
+      printf("readlink: file not exist\n");
       return r;
     }
 
@@ -646,12 +787,18 @@ yfs_client::readlink(inum ino, std::string &data)
 }
 
 int
-yfs_client::symlink(inum parent, const char * name, const char * link, inum & ino_out)
+yfs_client::symlink(inum parent, const char * name, const char * link, mode_t mode, inum & ino_out)
 {
     int r = OK;
 
     lc->acquire(parent);
     std::string buf;
+    if (!can_write(parent)) {
+      printf("symlink: permission denied\n");
+      lc->release(parent);
+      return NOPEM;
+    }
+
     r = ec->get(parent, buf);
     if (r != OK) {
       printf("symlink: parent directory not exist\n");
@@ -667,7 +814,12 @@ yfs_client::symlink(inum parent, const char * name, const char * link, inum & in
       return EXIST;
     }
 
-    r = ec->create(extent_protocol::T_SYMLINK, ino_out);
+    extent_protocol::attr a;
+    a.mode = mode;
+    a.type = extent_protocol::T_SYMLINK;
+    a.uid = uid;
+    a.gid = uid;
+    r = ec->create(a, ino_out);
     if (r != OK) {
       printf("symlink: creation failure\n");
       lc->release(parent);

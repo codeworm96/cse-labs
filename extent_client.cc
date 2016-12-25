@@ -28,11 +28,20 @@ extent_client::getattr(extent_protocol::extentid_t eid,
 }
 
 extent_protocol::status
-extent_client::create(uint32_t type, extent_protocol::extentid_t &id)
+extent_client::setattr(extent_protocol::extentid_t eid, 
+		       extent_protocol::attr &attr)
+{
+  extent_protocol::status ret = extent_protocol::OK;
+  ret = cl->call(extent_protocol::getattr, eid, attr);
+  return ret;
+}
+
+extent_protocol::status
+extent_client::create(extent_protocol::attr &a, extent_protocol::extentid_t &id)
 {
   extent_protocol::status ret = extent_protocol::OK;
   // Your lab3 code goes here
-  ret = cl->call(extent_protocol::create, type, id);
+  ret = cl->call(extent_protocol::create, a, id);
   return ret;
 }
 
