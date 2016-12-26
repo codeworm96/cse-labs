@@ -73,7 +73,6 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
 int extent_server::setattr(extent_protocol::extentid_t id, extent_protocol::attr a, int & r)
 {
   printf("extent_server: setattr %lld\n", id);
-  printf("recv: %d %d %d\n", a.mode, a.uid, a.gid);
 
   id &= 0x7fffffff;
   r = 0;

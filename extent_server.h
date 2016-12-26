@@ -36,9 +36,3 @@ class extent_server {
 
 #endif 
 
-
-
-
-
-
-

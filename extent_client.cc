@@ -33,7 +33,6 @@ extent_client::setattr(extent_protocol::extentid_t eid,
 {
   int r;
   extent_protocol::status ret = extent_protocol::OK;
-  printf("send: %d %d %d\n", attr.mode, attr.uid, attr.gid);
   ret = cl->call(extent_protocol::setattr, eid, attr, r);
   return ret;
 }

@@ -232,7 +232,6 @@ inode_manager::alloc_inode(const extent_protocol::attr &a)
   ino->mtime = std::time(0);
   ino->ctime = std::time(0);
   ino->mode = a.mode;
-printf("new mode: %d\n", a.mode);
   ino->uid = a.uid;
   ino->gid = a.gid;
   bm->write_block(IBLOCK(pos, bm->sb.nblocks), buf);
@@ -571,7 +570,6 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
     a.mode = ino->mode;
     a.uid = ino->uid;
     a.gid = ino->gid;
-printf("mode: %d", ino->mode);
 
     free(ino);
   }
@@ -587,7 +585,6 @@ inode_manager::setattr(uint32_t inum, const extent_protocol::attr &a)
     ino->uid = a.uid;
     ino->gid = a.gid;
 
-    printf("ch: %d %hd %hd\n", a.mode, a.uid, a.gid);
     put_inode(inum, ino);
     free(ino);
   }
