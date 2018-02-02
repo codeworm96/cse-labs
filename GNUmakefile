@@ -8,7 +8,7 @@ LAB4GE=$(shell expr $(LAB) \>\= 4)
 LAB5GE=$(shell expr $(LAB) \>\= 5)
 LAB6GE=$(shell expr $(LAB) \>\= 6)
 LAB7GE=$(shell expr $(LAB) \>\= 7)
-CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64 -std=c++11
+CXXFLAGS =  -g -MMD -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64 -std=c++11
 FUSEFLAGS= -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=25 -I/usr/local/include/fuse -I/usr/include/fuse
 
 # choose librpc based on architecture
@@ -74,42 +74,33 @@ lock_demo=lock_demo.cc lock_client.cc
 lock_demo : $(patsubst %.cc,%.o,$(lock_demo)) rpc/$(RPCLIB)
 
 lock_tester=lock_tester.cc lock_client.cc
-ifeq ($(LAB5GE),1)
-  lock_tester += lock_client_cache.cc
-endif
-ifeq ($(LAB7GE),1)
-  lock_tester+=rsm_client.cc handle.cc lock_client_cache_rsm.cc
-endif
 lock_tester : $(patsubst %.cc,%.o,$(lock_tester)) rpc/$(RPCLIB)
 
 lock_server=lock_server.cc lock_smain.cc
-ifeq ($(LAB5GE),1)
-  lock_server+=lock_server_cache.cc handle.cc
-endif
 ifeq ($(LAB6GE),1)
   lock_server+= $(rsm_files)
-endif
-ifeq ($(LAB7GE),1)
-  lock_server+= lock_server_cache_rsm.cc
 endif
 
 lock_server : $(patsubst %.cc,%.o,$(lock_server)) rpc/$(RPCLIB)
 
-lab1_tester=lab1_tester.cc extent_client.cc extent_server.cc inode_manager.cc
+lab1_tester=lab1_tester.cc extent_client.cc extent_server.cc inode_manager.cc #disk.cc
 lab1_tester : $(patsubst %.cc,%.o,$(lab1_tester))
-yfs_client=yfs_client.cc extent_client.cc fuse.cc extent_server.cc inode_manager.cc
+
+test_lab_7=yfs_client.cc extent_client.cc test_lab_7.cc  extent_server.cc inode_manager.cc #disk.cc
+
+yfs_client=yfs_client.cc extent_client.cc fuse.cc extent_server.cc inode_manager.cc #disk.cc
 ifeq ($(LAB3GE),1)
   yfs_client += lock_client.cc
+  test_lab_7 += lock_client.cc
 endif
-ifeq ($(LAB7GE),1)
-  yfs_client += rsm_client.cc lock_client_cache_rsm.cc
-endif
-ifeq ($(LAB5GE),1)
-  yfs_client += lock_client_cache.cc
-endif
+
 yfs_client : $(patsubst %.cc,%.o,$(yfs_client)) rpc/$(RPCLIB)
 
-extent_server=extent_server.cc extent_smain.cc inode_manager.cc
+test_lab_7 : $(patsubst %.cc,%.o,$(test_lab_7)) rpc/$(RPCLIB)
+
+
+
+extent_server=extent_server.cc extent_smain.cc inode_manager.cc #disk.cc
 extent_server : $(patsubst %.cc,%.o,$(extent_server)) rpc/$(RPCLIB)
 
 test-lab-3-b=test-lab-3-b.c
